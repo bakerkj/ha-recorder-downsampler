@@ -1,0 +1,21 @@
+{
+  "issues": {
+    "orphaned_mirror": {
+      "title": "Recorder Downsampler: mirror with no live source",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "{mirror} has no matching source",
+            "description": "The source `{source}` is no longer mirrored by any rule — it was disabled or removed from your configuration — so this leftover mirror records no data. Choose how to handle it. Recorder Downsampler never deletes a mirror on its own; if the source comes back, the mirror resumes and this issue clears automatically.",
+            "menu_options": {
+              "delete_this": "Delete this mirror",
+              "delete_all": "Delete ALL orphaned mirrors",
+              "ignore_this": "Keep this mirror (ignore)",
+              "ignore_all": "Keep ALL orphaned mirrors (ignore all)"
+            }
+          }
+        }
+      }
+    }
+  }
+}

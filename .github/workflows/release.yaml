@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - name: Validate version matches release tag
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('custom_components/recorder_downsampler/manifest.json'))['version'])")
+          tag="${GITHUB_REF#refs/tags/v}"
+          if [ "$version" != "$tag" ]; then
+            echo "manifest.json version ($version) does not match release tag ($tag)"
+            exit 1
+          fi
+      - name: Build release zip
+        run: |
+          cd custom_components/recorder_downsampler
+          zip -r "$GITHUB_WORKSPACE/recorder_downsampler.zip" .
+      - name: Attach zip to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run:
+          gh release upload "${GITHUB_REF#refs/tags/}" recorder_downsampler.zip
+          --clobber

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+*.egg-info/
+dist/
+build/
+
+# Local-only continuation notes — not part of the published integration.
+HANDOFF.md
+.coverage

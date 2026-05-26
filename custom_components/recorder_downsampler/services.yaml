@@ -1,0 +1,36 @@
+reload:
+  name: Reload
+  description: >-
+    Reload the recorder_downsampler configuration from configuration.yaml
+    (including any !include files). Call this after editing the config without
+    restarting Home Assistant. Newly matched sources get a mirror immediately,
+    sources removed from the config have their mirror removed, and existing
+    mirrors whose interval/method/precision changed are retuned in place. If the
+    YAML is invalid the reload fails and the previous configuration is
+    preserved.
+
+backfill_history:
+  name: Backfill history from source
+  description: >-
+    Graft each mirror's pre-creation long-term statistics from its source, so
+    the Energy dashboard (and any statistics graphs) stay continuous after you
+    re-point them to the mirror. Cumulative (energy) statistics are rebased so
+    the running total stays monotonic; mean (power) statistics are copied as-is.
+    Idempotent — a mirror that's already been backfilled is skipped. Run once
+    around cutover, ideally after a database backup. Omit the target to backfill
+    every mirror.
+  fields:
+    entity_id:
+      name: Mirrors
+      description: Limit the backfill to specific mirror entities (default all).
+      selector:
+        entity:
+          integration: recorder_downsampler
+          multiple: true
+    dry_run:
+      name: Dry run
+      description: >-
+        Preview only — report how many rows would be grafted per mirror and
+        write nothing (no statistics import, no state change).
+      selector:
+        boolean:
