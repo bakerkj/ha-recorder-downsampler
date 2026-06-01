@@ -35,6 +35,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers.start import async_at_started
 from homeassistant.setup import async_when_setup
+from homeassistant.util import dt as dt_util
 
 from . import (
     SIGNAL_ADD_TARGETS,
@@ -42,7 +43,11 @@ from . import (
     RecorderDownsampleManager,
     Target,
 )
-from .aggregation import aggregate_samples, resolve_method, resolve_precision
+from .aggregation import (
+    aggregate_weighted_samples,
+    resolve_method,
+    resolve_precision,
+)
 from .const import (
     ATTR_MANAGED_BY,
     COPY_DISPLAY_PRECISION_ONCE,
@@ -141,9 +146,24 @@ class DownsampleSensor(SensorEntity):
         self._rule_name = target.rule_name
         self._copy_display_precision = target.copy_display_precision
 
-        # Raw source states seen this interval; collapsed (numeric or string)
-        # on each emit. Sentinel states (unavailable/unknown) are not buffered.
-        self._buffer: list[str] = []
+        # Raw source states seen this interval, paired with the wall-clock time
+        # the state became active (`last_updated`). Collapsed on each emit;
+        # sentinel states (unavailable/unknown) are not buffered. The timestamp
+        # is what time-weighted methods (`mean`, `circular_mean`) use to weight
+        # each sample by its dwell time.
+        self._buffer: list[tuple[str, float]] = []
+
+        # The source's most recent buffered value, persisted across emits. At
+        # the start of each new interval this is the value the source was
+        # already at — so it gets prepended as a virtual interval-start sample
+        # for time-weighting (otherwise a sample that arrives mid-interval
+        # would drop the leading sub-interval, biasing the weighted mean).
+        self._carry_value: str | None = None
+
+        # Wall-clock timestamp (seconds since epoch) of the previous emit, or
+        # of setup if no emit has happened yet. The lower bound of the current
+        # interval's time-weighting window; the upper bound is the next emit.
+        self._last_emit_ts: float | None = None
 
         # Until the mirror has produced a real value we suppress state writes,
         # so the initial `unknown` (e.g. while a push source connects on a cold
@@ -329,15 +349,24 @@ class DownsampleSensor(SensorEntity):
                 self.hass, SIGNAL_UPDATE_TARGETS, self._on_reconfigure
             )
         )
+        # Setup time anchors the first interval's time-weighting window — any
+        # source updates in the first interval are weighted against this.
+        self._last_emit_ts = dt_util.utcnow().timestamp()
         # Seed the buffer with the current value so the first interval has data,
         # and publish that value now so the mirror is born populated instead of
         # `unknown` (the buffer is kept, so the first interval still includes
         # this sample). If the source has no usable value yet, there's nothing
         # to publish and the mirror stays `unknown` until data arrives.
         if (state := self.hass.states.get(self._source)) is not None:
-            self._ingest(state.state, state.attributes)
+            self._ingest(state.state, state.attributes, self._last_emit_ts)
             if self._buffer:
-                self._publish_aggregate(self._buffer)
+                # Seed the carry-over too, so an interval with no source events
+                # still has a value to weight (the same value, full interval).
+                self._carry_value = state.state
+                # Publish the seed value immediately. A single sample with any
+                # positive weight collapses to that value under every method,
+                # so we don't need to model dwell time here.
+                self._publish_weighted_aggregate([(state.state, 1.0)])
 
     @callback
     def _start_timer(self) -> None:
@@ -389,24 +418,26 @@ class DownsampleSensor(SensorEntity):
         new_state = event.data.get("new_state")
         if new_state is None:
             return
-        self._ingest(new_state.state, new_state.attributes)
+        self._ingest(
+            new_state.state, new_state.attributes, new_state.last_updated.timestamp()
+        )
 
-    def _ingest(self, value: str, attrs: Mapping[str, Any]) -> None:
+    def _ingest(self, value: str, attrs: Mapping[str, Any], when_ts: float) -> None:
         self._refresh_source_metadata(attrs)
         if value in (STATE_UNKNOWN, STATE_UNAVAILABLE, None, ""):
             return
-        self._buffer.append(value)
+        self._buffer.append((value, when_ts))
 
     @callback
-    def _publish_aggregate(self, samples: list[str]) -> bool:
-        """Write the aggregate of *samples* as the mirror's value.
+    def _publish_weighted_aggregate(self, weighted: list[tuple[str, float]]) -> bool:
+        """Write the time-weighted aggregate of ``weighted`` as the mirror's value.
 
-        Returns True if a value was written. Does NOT touch the buffer, so it
-        can publish an initial value at creation while leaving the seed sample
-        in place for the first interval's aggregate.
+        Each entry is ``(raw-state-string, weight-in-seconds)``. Returns True
+        if a value was written; False if the aggregation produced ``None``
+        (empty input, zero total weight, or circular cancellation).
         """
         method = resolve_method(self._method, self._state_class)
-        value = aggregate_samples(samples, method)
+        value = aggregate_weighted_samples(weighted, method)
         if value is None:
             return False
         if isinstance(value, float):
@@ -439,14 +470,60 @@ class DownsampleSensor(SensorEntity):
 
     @callback
     def _emit(self, now: datetime) -> None:
-        """Write the aggregated value for the elapsed interval, then reset."""
+        """Write the aggregated value for the elapsed interval, then reset.
+
+        For time-weighted methods (`mean`, `circular_mean`) each buffered
+        sample's weight is the time it was the source's active state — from
+        its `last_updated` to the next sample's, with the last sample weighted
+        to the emit time. The previous interval's final value is prepended as
+        a virtual interval-start sample so the leading gap (before the first
+        in-interval update arrived) is correctly attributed to it.
+        """
+        now_ts = now.timestamp()
         samples = self._buffer
         self._buffer = []
+        # Lower bound of the weighting window. On the very first emit this was
+        # set to setup time in `async_added_to_hass`; on every subsequent emit
+        # it's the previous emit's timestamp (carrying-over below).
+        interval_start = (
+            self._last_emit_ts if self._last_emit_ts is not None else now_ts
+        )
+        self._last_emit_ts = now_ts
 
-        if self._publish_aggregate(samples):
-            return
+        if samples:
+            # Build the timeline `[(value, active_from_ts), …]` for this
+            # interval. If we have a carry-over from the previous interval and
+            # the first new sample arrived after the interval started, prepend
+            # the carry-over at the interval boundary so its dwell time is
+            # accounted for. (If the first sample's ts equals or precedes
+            # `interval_start` — e.g. setup-seed or clock skew — skip the
+            # prepend: the carry-over had no dwell in this interval.)
+            timeline: list[tuple[str, float]] = []
+            if self._carry_value is not None and samples[0][1] > interval_start:
+                timeline.append((self._carry_value, interval_start))
+            timeline.extend(samples)
 
-        # No samples buffered this interval. Look at the source's CURRENT state.
+            # Convert (value, active_from_ts) to (value, weight): each sample
+            # is active from its ts to the next sample's ts; the last is
+            # active from its ts to `now_ts`. Negative weights (clock skew /
+            # out-of-order events) clamp to 0; zero-weight samples are kept
+            # so unweighted methods (max/min/first/last/median) still see
+            # them — only `weighted_mean` / `weighted_circular_mean` drop
+            # zero-weight contributions, which is mathematically a no-op.
+            weighted: list[tuple[str, float]] = []
+            for i, (value, ts) in enumerate(timeline):
+                end_ts = timeline[i + 1][1] if i + 1 < len(timeline) else now_ts
+                weighted.append((value, max(0.0, end_ts - ts)))
+
+            # Update carry-over for the next interval: the most recent value
+            # we've observed (whether prepended carry or in-buffer sample).
+            self._carry_value = samples[-1][0]
+
+            if self._publish_weighted_aggregate(weighted):
+                return
+
+        # No samples buffered this interval (or the aggregate was degenerate,
+        # e.g. circular_mean cancellation). Look at the source's CURRENT state.
         source = self.hass.states.get(self._source)
         if source is None or source.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             # Source down/gone: reflect the outage once, then hold unavailable.
@@ -461,4 +538,4 @@ class DownsampleSensor(SensorEntity):
         # source updates slowly — self-heal by sampling the current value, so a
         # missed event can't strand the mirror indefinitely.
         if not self._attr_available:
-            self._publish_aggregate([source.state])
+            self._publish_weighted_aggregate([(source.state, 1.0)])

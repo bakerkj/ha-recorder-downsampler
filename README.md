@@ -102,6 +102,16 @@ Override per rule with `mean`, `median`, `max`, `min`, `last`, `first`, or
 10° average to 0°, not 180°; samples are treated as degrees and the result is in
 `[0, 360)`. If the samples cancel out, the interval is skipped).
 
+Both `mean` and `circular_mean` are **time-weighted**: each sample contributes
+according to how long it was the source's active state (from its `last_updated`
+to the next sample's, with the last sample weighted to the emit time). The
+previous interval's final value is also weighted as the interval-start
+carry-over, so a source that updates rarely (e.g. every few minutes) doesn't
+lose its leading sub-interval. This matches HA's own recorder-statistics
+behavior; for sources that update on a roughly regular cadence the result equals
+the arithmetic mean. The other methods (`max`/`min`/`first`/`last`/ `median`)
+are dwell-time-independent and unaffected.
+
 ## Precision (`precision`)
 
 Rounds the value the recorder actually stores (not just its display). `auto`
