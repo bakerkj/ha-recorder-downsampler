@@ -16,6 +16,7 @@ from custom_components.recorder_downsampler.aggregation import (
 )
 from custom_components.recorder_downsampler.const import (
     METHOD_AUTO,
+    METHOD_CIRCULAR_MEAN,
     METHOD_FIRST,
     METHOD_LAST,
     METHOD_MAX,
@@ -64,6 +65,40 @@ def test_aggregate_empty_is_none() -> None:
 def test_aggregate_unknown_method_raises() -> None:
     with pytest.raises(ValueError, match="unknown aggregation method"):
         aggregate([1.0], "bogus")
+
+
+def test_aggregate_circular_mean_wraps_around_zero() -> None:
+    # The point of circular_mean: 350° and 10° must average to 0°, not 180°.
+    result = aggregate([350.0, 10.0], METHOD_CIRCULAR_MEAN)
+    assert result is not None
+    assert result == pytest.approx(0.0, abs=1e-9) or result == pytest.approx(
+        360.0, abs=1e-9
+    )
+
+
+def test_aggregate_circular_mean_matches_arithmetic_when_no_wrap() -> None:
+    # Within a quadrant the circular mean ~= the arithmetic mean.
+    result = aggregate([10.0, 20.0, 30.0], METHOD_CIRCULAR_MEAN)
+    assert result is not None
+    assert result == pytest.approx(20.0, abs=1e-6)
+
+
+def test_aggregate_circular_mean_returns_in_zero_to_360() -> None:
+    # Negative atan2 results must wrap into [0, 360).
+    result = aggregate([10.0, 350.0, 0.0], METHOD_CIRCULAR_MEAN)
+    assert result is not None
+    assert 0.0 <= result < 360.0
+
+
+def test_aggregate_circular_mean_cancelling_samples_return_none() -> None:
+    # Opposing samples cancel out: the mean is undefined, so skip the interval
+    # (same contract as an empty buffer) rather than emit an arbitrary atan2(0, 0).
+    assert aggregate([0.0, 180.0], METHOD_CIRCULAR_MEAN) is None
+    assert aggregate([90.0, 270.0], METHOD_CIRCULAR_MEAN) is None
+
+
+def test_aggregate_circular_mean_single_value_passthrough() -> None:
+    assert aggregate([42.0], METHOD_CIRCULAR_MEAN) == pytest.approx(42.0, abs=1e-9)
 
 
 def test_aggregate_raw_first_and_last() -> None:

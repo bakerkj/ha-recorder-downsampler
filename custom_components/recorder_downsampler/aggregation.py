@@ -11,11 +11,13 @@ source's ``state_class`` (see :func:`resolve_method`).
 
 from __future__ import annotations
 
+import math
 import statistics
 from collections.abc import Sequence
 
 from .const import (
     METHOD_AUTO,
+    METHOD_CIRCULAR_MEAN,
     METHOD_FIRST,
     METHOD_LAST,
     METHOD_MAX,
@@ -94,6 +96,20 @@ def aggregate(values: Sequence[float], method: str) -> float | None:
         return values[0]
     if method == METHOD_LAST:
         return values[-1]
+    if method == METHOD_CIRCULAR_MEAN:
+        # Vector mean on the unit circle: treats each sample as degrees, returns
+        # the resultant angle in [0, 360). When the samples cancel out (e.g.
+        # [0, 180]) the resultant magnitude is ~0 and the mean is undefined —
+        # return None so the mirror skips the interval (same as an empty buffer)
+        # instead of recording an arbitrary atan2(0, 0) value.
+        sin_sum = math.fsum(math.sin(math.radians(v)) for v in values)
+        cos_sum = math.fsum(math.cos(math.radians(v)) for v in values)
+        if math.hypot(sin_sum, cos_sum) < 1e-9:
+            return None
+        # A tiny-negative atan2 result can round to exactly 360.0 after `% 360`
+        # in float; collapse that back to 0.0 so the result stays in [0, 360).
+        angle = math.degrees(math.atan2(sin_sum, cos_sum)) % 360.0
+        return 0.0 if angle >= 360.0 else angle
     raise ValueError(f"unknown aggregation method: {method!r}")
 
 
