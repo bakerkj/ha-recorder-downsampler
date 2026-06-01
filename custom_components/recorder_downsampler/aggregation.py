@@ -144,3 +144,73 @@ def aggregate_samples(samples: Sequence[str], method: str) -> float | str | None
         except TypeError, ValueError:
             return aggregate_raw(samples, method)
     return aggregate(numbers, method)
+
+
+# Methods whose result depends on how long each sample was the source's active
+# state (dwell time). For these we time-weight; for the rest (max/min/first/
+# last sample, median order-statistic) weighting is either meaningless or
+# definitionally awkward, so we strip weights and reuse the unweighted path.
+TIME_WEIGHTABLE_METHODS = frozenset({METHOD_MEAN, METHOD_CIRCULAR_MEAN})
+
+
+def weighted_mean(weighted_values: Sequence[tuple[float, float]]) -> float | None:
+    """Arithmetic mean weighted by per-sample dwell time.
+
+    ``weighted_values`` is a sequence of ``(value, weight)`` pairs where each
+    weight is the duration (seconds) the value was the source's active state.
+    Returns ``None`` for an empty input or zero total weight (degenerate
+    interval — same skip contract as an empty buffer).
+    """
+    total_weight = math.fsum(w for _, w in weighted_values)
+    if total_weight <= 0:
+        return None
+    weighted_sum = math.fsum(v * w for v, w in weighted_values)
+    return weighted_sum / total_weight
+
+
+def weighted_circular_mean(
+    weighted_values: Sequence[tuple[float, float]],
+) -> float | None:
+    """Vector mean on the unit circle weighted by per-sample dwell time.
+
+    Samples are degrees; result is in ``[0, 360)``. As with the unweighted
+    circular mean, a near-zero resultant (samples cancel out) returns ``None``
+    rather than fabricating an arbitrary ``atan2(0, 0) = 0°``.
+    """
+    if not weighted_values:
+        return None
+    sin_sum = math.fsum(math.sin(math.radians(v)) * w for v, w in weighted_values)
+    cos_sum = math.fsum(math.cos(math.radians(v)) * w for v, w in weighted_values)
+    if math.hypot(sin_sum, cos_sum) < 1e-9:
+        return None
+    angle = math.degrees(math.atan2(sin_sum, cos_sum)) % 360.0
+    return 0.0 if angle >= 360.0 else angle
+
+
+def aggregate_weighted_samples(
+    weighted_samples: Sequence[tuple[str, float]],
+    method: str,
+) -> float | str | None:
+    """Time-weighted variant of :func:`aggregate_samples`.
+
+    ``weighted_samples`` is a sequence of ``(raw-state-string, weight)`` pairs.
+    Numeric sources are routed to the weighted-mean / weighted-circular-mean
+    branch for the two methods that take weighting; other methods strip the
+    weights and reuse the unweighted path (so `max`/`min`/`first`/`last`/
+    `median` behave unchanged). Non-numeric sources fall through to string
+    sampling — weighting on text is meaningless, so the weights are dropped.
+    """
+    if not weighted_samples:
+        return None
+    numbers: list[tuple[float, float]] = []
+    for sample, weight in weighted_samples:
+        try:
+            numbers.append((float(sample), weight))
+        except TypeError, ValueError:
+            return aggregate_raw([s for s, _ in weighted_samples], method)
+    if method == METHOD_MEAN:
+        return weighted_mean(numbers)
+    if method == METHOD_CIRCULAR_MEAN:
+        return weighted_circular_mean(numbers)
+    # Unweighted methods: strip weights, reuse the existing path.
+    return aggregate([v for v, _ in numbers], method)

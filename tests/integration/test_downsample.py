@@ -123,6 +123,9 @@ async def test_mean_emitted_on_interval(
     hass.states.async_set(SOURCE, "100", MEAS)  # seeds the buffer at setup
     await _setup(hass, **{CONF_INTERVAL: "00:00:10", CONF_METHOD: METHOD_MEAN})
 
+    # Mean is time-weighted; placing the second sample at the interval midpoint
+    # gives both samples equal dwell time so the weighted mean equals (100+200)/2.
+    freezer.move_to(NOW + timedelta(seconds=5.5))
     hass.states.async_set(SOURCE, "200", MEAS)  # second sample this interval
     await hass.async_block_till_done()
 
@@ -162,7 +165,11 @@ async def test_each_method_aggregates_over_interval(
     hass.states.async_set(SOURCE, samples[0], MEAS)  # seeds the buffer at setup
     await _setup(hass, **{CONF_INTERVAL: "00:00:10", CONF_METHOD: method})
 
-    for v in samples[1:]:
+    # Space the four samples evenly across the 11 s interval so each gets the
+    # same dwell time — the time-weighted mean then equals the arithmetic mean
+    # (and the unweighted methods see all four samples, not just the last).
+    for i, v in enumerate(samples[1:], start=1):
+        freezer.move_to(NOW + timedelta(seconds=11 * i / 4))
         hass.states.async_set(SOURCE, v, MEAS)
         await hass.async_block_till_done()
 
@@ -174,6 +181,36 @@ async def test_each_method_aggregates_over_interval(
     assert st is not None
     assert st.attributes["method"] == method
     assert float(st.state) == pytest.approx(expected)
+
+
+async def test_mean_is_time_weighted_by_dwell_duration(
+    recorder_hass: HomeAssistant, freezer: Any
+) -> None:
+    """Mean weights each sample by how long it was the source's active state.
+
+    A source that sat at 100 for 9 s then jumped to 200 for the last 1 s of a
+    10 s interval should record ~110, not the arithmetic mean 150 — the
+    arithmetic mean would over-represent a brief excursion. The carry-over
+    from the previous interval is the source's last value at the boundary,
+    which here is the setup seed.
+    """
+    hass = recorder_hass
+    hass.states.async_set(SOURCE, "100", MEAS)
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10", CONF_METHOD: METHOD_MEAN})
+
+    # The source sits at 100 for 9 s, then jumps to 200 at t=9 — 200 is the
+    # active value for the final 2 s (until the t=11 emit). Weights: 100 -> 9 s,
+    # 200 -> 2 s -> weighted mean = (100*9 + 200*2) / 11 ≈ 118.18.
+    freezer.move_to(NOW + timedelta(seconds=9))
+    hass.states.async_set(SOURCE, "200", MEAS)
+    await hass.async_block_till_done()
+    freezer.move_to(NOW + timedelta(seconds=11))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    st = hass.states.get(MIRROR)
+    assert st is not None
+    assert float(st.state) == pytest.approx((100 * 9 + 200 * 2) / 11, abs=0.01)
 
 
 async def test_emit_self_heals_stuck_unavailable_mirror(
@@ -417,8 +454,12 @@ async def test_precision_explicit_rounds_downsampled_value(
         **{CONF_INTERVAL: "00:00:10", CONF_METHOD: METHOD_MEAN, CONF_PRECISION: 1},
     )
 
+    # Three samples evenly spaced over the 11 s interval -> uniform dwell -> the
+    # time-weighted mean reduces to the arithmetic mean (100+101+100)/3.
+    freezer.move_to(NOW + timedelta(seconds=11 / 3))
     hass.states.async_set(SOURCE, "101", MEAS)
     await hass.async_block_till_done()
+    freezer.move_to(NOW + timedelta(seconds=22 / 3))
     hass.states.async_set(SOURCE, "100", MEAS)
     await hass.async_block_till_done()
 
@@ -440,8 +481,12 @@ async def test_precision_auto_uses_suggested_display_precision(
     hass.states.async_set(SOURCE, "100", attrs)
     await _setup(hass, **{CONF_INTERVAL: "00:00:10", CONF_METHOD: METHOD_MEAN})
 
+    # Three samples evenly spaced over 11 s -> uniform dwell -> the time-
+    # weighted mean reduces to the arithmetic mean (100+102+100)/3.
+    freezer.move_to(NOW + timedelta(seconds=11 / 3))
     hass.states.async_set(SOURCE, "102", attrs)
     await hass.async_block_till_done()
+    freezer.move_to(NOW + timedelta(seconds=22 / 3))
     hass.states.async_set(SOURCE, "100", attrs)
     await hass.async_block_till_done()
 
@@ -1281,7 +1326,9 @@ async def test_dry_run_then_live_reload_creates_mirrors(
     assert hass.states.get(MIRROR) is not None
     assert len(manager._created) == 1
 
-    # The now-live mirror emits on the next interval.
+    # The now-live mirror emits on the next interval. Fire the second sample
+    # at the interval midpoint so the time-weighted mean is (100+200)/2.
+    freezer.move_to(NOW + timedelta(seconds=5.5))
     hass.states.async_set(SOURCE, "200", MEAS)
     await hass.async_block_till_done()
     freezer.move_to(NOW + timedelta(seconds=11))
@@ -1344,6 +1391,10 @@ async def test_power_and_energy_pair_under_one_rule(
     assert await async_setup_component(hass, DOMAIN, {DOMAIN: base})
     await hass.async_block_till_done()
 
+    # Mean is time-weighted; firing the second power sample at the interval
+    # midpoint gives both samples equal dwell so mean(100, 102) = 101 holds.
+    # The energy reading is `last`-aggregated, so its timing is immaterial.
+    freezer.move_to(NOW + timedelta(seconds=5.5))
     hass.states.async_set(power_src, "102", power_attrs)  # mean(100, 102) = 101
     hass.states.async_set(energy_src, "5.55555", energy_attrs)  # last, 5 dp
     await hass.async_block_till_done()
@@ -1498,7 +1549,13 @@ def _mirrors(hass: HomeAssistant) -> set[str]:
 
 
 async def _emit_one_interval(hass: HomeAssistant, freezer: Any) -> None:
-    """Push each fleet source's second sample, then fire the emit timer."""
+    """Push each fleet source's second sample, then fire the emit timer.
+
+    Pushes are timed to the interval midpoint so the seed (at setup time) and
+    the second sample each get half the interval — time-weighted mean then
+    reduces to the arithmetic mean, matching the fleet's expected values.
+    """
+    freezer.move_to(NOW + timedelta(seconds=5.5))
     for oid, (_seed, second, attrs) in _FLEET.items():
         hass.states.async_set(f"sensor.{oid}", second, attrs)
     await hass.async_block_till_done()
@@ -1745,6 +1802,9 @@ async def test_unavailable_samples_ignored_within_interval(
 
     hass.states.async_set(SOURCE, STATE_UNAVAILABLE, MEAS)  # dropped
     await hass.async_block_till_done()
+    # Fire the valid second sample at the interval midpoint so the seed and
+    # this sample each get half the interval -> time-weighted mean is 150.
+    freezer.move_to(NOW + timedelta(seconds=5.5))
     hass.states.async_set(SOURCE, "200", MEAS)  # valid
     await hass.async_block_till_done()
     hass.states.async_set(SOURCE, STATE_UNKNOWN, MEAS)  # dropped
@@ -2032,6 +2092,8 @@ async def test_precision_none_keeps_raw_value(
         },
     )
 
+    # Two samples at uniform dwell -> time-weighted mean equals arithmetic mean.
+    freezer.move_to(NOW + timedelta(seconds=5.5))
     hass.states.async_set(SOURCE, "100.14", MEAS)
     await hass.async_block_till_done()
     freezer.move_to(NOW + timedelta(seconds=11))
@@ -2596,6 +2658,9 @@ async def test_seed_sample_still_counts_in_first_interval(
     await _setup(hass, **{CONF_INTERVAL: "00:00:10", CONF_METHOD: METHOD_MEAN})
     assert float(_state(hass, MIRROR).state) == pytest.approx(100.0)  # born at 100
 
+    # Fire the second sample at the interval midpoint so the seed and this
+    # sample each get half the interval -> time-weighted mean = (100+200)/2.
+    freezer.move_to(NOW + timedelta(seconds=5.5))
     hass.states.async_set(SOURCE, "200", MEAS)
     await hass.async_block_till_done()
     freezer.move_to(NOW + timedelta(seconds=11))
