@@ -97,7 +97,10 @@ Rules use the same vocabulary as ha-recorder-tuning:
 - `total` / `total_increasing` → **last** (preserves the cumulative counter)
 - otherwise → **last**
 
-Override per rule with `mean`, `median`, `max`, `min`, `last`, or `first`.
+Override per rule with `mean`, `median`, `max`, `min`, `last`, `first`, or
+`circular_mean` (vector mean for angular sources like wind direction — 350° and
+10° average to 0°, not 180°; samples are treated as degrees and the result is in
+`[0, 360)`. If the samples cancel out, the interval is skipped).
 
 ## Precision (`precision`)
 

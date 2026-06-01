@@ -63,6 +63,11 @@ METHOD_MAX = "max"
 METHOD_MIN = "min"
 METHOD_LAST = "last"
 METHOD_FIRST = "first"
+# Vector mean for angular sources (wind direction, …): treats each sample as a
+# unit vector on the unit circle and returns the resultant angle in [0, 360)
+# degrees, so 350° and 10° average to 0° (not 180°). Matches HA's own
+# ``mean_type=circular`` statistics for wind-direction sensors.
+METHOD_CIRCULAR_MEAN = "circular_mean"
 METHODS = [
     METHOD_AUTO,
     METHOD_MEAN,
@@ -71,6 +76,7 @@ METHODS = [
     METHOD_MIN,
     METHOD_LAST,
     METHOD_FIRST,
+    METHOD_CIRCULAR_MEAN,
 ]
 
 # ---------------------------------------------------------------------------
