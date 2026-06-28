@@ -2671,6 +2671,42 @@ async def test_seed_sample_still_counts_in_first_interval(
     assert float(_state(hass, MIRROR).state) == pytest.approx(150.0)
 
 
+async def test_unit_falls_back_to_registry_when_source_attrs_omit_it(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """A source mid-race can present a numeric state with ``state_class`` set
+    but no ``unit_of_measurement`` in its attrs (e.g. the ``average``
+    integration latches its unit from its sources on first read and can miss
+    it on a cold boot). Without a fallback, the mirror would seed-publish a
+    unitless value into long-term stats and permanently trip the recorder's
+    unit-mismatch validator against historical rows in the source's real
+    unit. We fall back to the source's registry-cached unit, which is what
+    new stats rows must match."""
+    hass = recorder_hass
+    # Pre-register the source in the entity registry WITH a unit — this is
+    # what survives across restarts from prior runs when the source was
+    # publishing correctly.
+    ent_reg = er.async_get(hass)
+    ent_reg.async_get_or_create(
+        "sensor",
+        "demo",
+        "src_no_unit_attr",
+        suggested_object_id="demo_power",
+        unit_of_measurement="°F",
+    )
+    # Mid-race: source state is numeric and records stats, but its attrs
+    # don't carry unit_of_measurement.
+    hass.states.async_set(SOURCE, "71.7", {"state_class": "measurement"})
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10", CONF_METHOD: METHOD_MEAN})
+
+    # Mirror is born populated with the correct unit from the registry — not
+    # unitless. New stats rows then match the historical unit, so no
+    # unit-mismatch repair is raised.
+    st = _state(hass, MIRROR)
+    assert float(st.state) == pytest.approx(71.7)
+    assert st.attributes.get("unit_of_measurement") == "°F"
+
+
 async def test_no_state_written_until_first_value(
     recorder_hass: HomeAssistant, freezer: Any
 ) -> None:
