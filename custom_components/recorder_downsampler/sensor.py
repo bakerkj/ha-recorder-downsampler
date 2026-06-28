@@ -306,7 +306,22 @@ class DownsampleSensor(SensorEntity):
         only shows up (or gains attributes) later.
         """
         if self._attr_native_unit_of_measurement is None:
-            self._attr_native_unit_of_measurement = attrs.get("unit_of_measurement")
+            unit = attrs.get("unit_of_measurement")
+            if unit is None:
+                # Fall back to the source's registry-cached unit. Some derived
+                # sources (e.g. the `average` integration) latch their unit
+                # from their own sources on first read; if those sources are
+                # still `unknown` at cold-boot, the derived source can settle
+                # to a numeric state with no unit in its attrs — even though
+                # historical stats rows are in its real unit. Publishing now
+                # without a unit would write a unit="" stats row and trip the
+                # recorder's unit-mismatch validator. The registry retains the
+                # last-known unit across restarts, which is what new stats
+                # rows must match, so it's the correct fallback.
+                src = er.async_get(self.hass).async_get(self._source)
+                if src is not None:
+                    unit = src.unit_of_measurement
+            self._attr_native_unit_of_measurement = unit
         if self._attr_device_class is None:
             self._attr_device_class = attrs.get("device_class")
         if self._state_class is None:
