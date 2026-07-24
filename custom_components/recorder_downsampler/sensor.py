@@ -327,10 +327,12 @@ class DownsampleSensor(SensorEntity):
         if self._state_class is None:
             self._state_class = attrs.get("state_class")
             self._attr_state_class = self._state_class
-        if self._suggested_precision is None:
-            if (precision := attrs.get("suggested_display_precision")) is not None:
-                self._attr_suggested_display_precision = precision
-                self._suggested_precision = precision
+        if (
+            self._suggested_precision is None
+            and (precision := attrs.get("suggested_display_precision")) is not None
+        ):
+            self._attr_suggested_display_precision = precision
+            self._suggested_precision = precision
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
