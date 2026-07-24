@@ -30,6 +30,9 @@ from homeassistant.helpers.reload import async_integration_yaml_config
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
+# Re-exported so the sensor platform and tests keep importing from the package
+# root. The implementations live in focused modules.
+from .backfill import build_backfill_rows
 from .const import (
     CONF_BACKFILL_HISTORY,
     CONF_COPY_DISPLAY_PRECISION,
@@ -68,10 +71,6 @@ from .const import (
     SIGNAL_ADD_TARGETS,
     SIGNAL_UPDATE_TARGETS,
 )
-
-# Re-exported so the sensor platform and tests keep importing from the package
-# root. The implementations live in focused modules.
-from .backfill import build_backfill_rows
 from .manager import RecorderDownsampleManager, Target, is_recorded
 from .resolve import resolve_rule_entities
 
@@ -282,9 +281,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 __all__ = [
     "CONFIG_SCHEMA",
-    "RecorderDownsampleManager",
     "SIGNAL_ADD_TARGETS",
     "SIGNAL_UPDATE_TARGETS",
+    "RecorderDownsampleManager",
     "Target",
     "build_backfill_rows",
     "is_recorded",

@@ -22,7 +22,6 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .backfill import build_backfill_rows
-from .resolve import _all_known_entity_ids, resolve_rule_entities
 from .const import (
     CONF_BACKFILL_HISTORY,
     CONF_COPY_DISPLAY_PRECISION,
@@ -41,6 +40,7 @@ from .const import (
     SIGNAL_ADD_TARGETS,
     SIGNAL_UPDATE_TARGETS,
 )
+from .resolve import _all_known_entity_ids, resolve_rule_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ def is_recorded(hass: HomeAssistant, entity_id: str) -> bool | None:
     API is pinned by tests/test_ha_signature_compat.py.
     """
     try:
-        from homeassistant.components.recorder import (  # noqa: PLC0415
+        from homeassistant.components.recorder import (
             is_entity_recorded,
         )
 
@@ -504,7 +504,7 @@ class RecorderDownsampleManager:
         for mirror in sorted(mirrors):
             try:
                 line = await self._async_backfill_one(mirror, dry_run=dry_run)
-            except Exception as err:  # noqa: BLE001 - isolate one mirror's failure
+            except Exception as err:
                 failed.append(mirror)
                 line = f"{mirror}: FAILED — {err}"
                 _LOGGER.exception("backfill failed for %s", mirror)
@@ -629,13 +629,12 @@ class RecorderDownsampleManager:
             if not mirrors:
                 return
             await self.async_backfill(mirrors)
-        except Exception:  # noqa: BLE001 - background best-effort
+        except Exception:
             _LOGGER.exception("auto-backfill failed")
 
     async def _async_backfill_one(
         self, mirror_entity_id: str, *, dry_run: bool = False
     ) -> str:
-        from homeassistant.helpers.recorder import get_instance
         from homeassistant.components.recorder.models import (
             StatisticData,
             StatisticMeanType,
@@ -646,6 +645,7 @@ class RecorderDownsampleManager:
             get_metadata,
             statistics_during_period,
         )
+        from homeassistant.helpers.recorder import get_instance
 
         ent_reg = er.async_get(self.hass)
         entry = ent_reg.async_get(mirror_entity_id)

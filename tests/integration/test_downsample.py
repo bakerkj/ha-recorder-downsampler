@@ -29,18 +29,18 @@ from homeassistant.components.recorder.statistics import (
 )
 from homeassistant.const import SERVICE_RELOAD, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
-from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.recorder import get_instance
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.components.recorder.common import (
-    async_wait_recording_done,
-)
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_capture_events,
     async_fire_time_changed,
+)
+from pytest_homeassistant_custom_component.components.recorder.common import (
+    async_wait_recording_done,
 )
 
 from custom_components.recorder_downsampler import CONFIG_SCHEMA
@@ -2747,8 +2747,8 @@ async def test_initial_mirror_creation_waits_for_source_integration(
 ) -> None:
     """On a cold boot the mirror isn't created until the integration its source
     belongs to has set up — not the whole-system started event."""
-    from homeassistant.core import CoreState
     from homeassistant.const import EVENT_COMPONENT_LOADED
+    from homeassistant.core import CoreState
     from homeassistant.setup import ATTR_COMPONENT
 
     hass = recorder_hass

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -22,7 +22,7 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
-NOW = datetime(2026, 4, 4, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 4, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ async def recorder_hass(
     recorder_mock: Any,
     enable_custom_integrations: None,
     freezer: Any,
-) -> AsyncGenerator[HomeAssistant, None]:
+) -> AsyncGenerator[HomeAssistant]:
     """HA with recorder running, clock frozen at NOW."""
     freezer.move_to(NOW)
     await async_wait_recording_done(hass)
