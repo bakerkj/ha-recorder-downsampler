@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.0.5](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.4...v0.0.5) (2026-07-24)
+
+
+### Miscellaneous Chores
+
+* **deps:** update actions/setup-python action to v7 ([#51](https://github.com/bakerkj/ha-recorder-downsampler/issues/51)) ([87105c6](https://github.com/bakerkj/ha-recorder-downsampler/commit/87105c641164622743aeee86ec1b5ad30d239787))
+* **deps:** update anthropics/claude-code-action action to v1.0.165 ([#42](https://github.com/bakerkj/ha-recorder-downsampler/issues/42)) ([0989c69](https://github.com/bakerkj/ha-recorder-downsampler/commit/0989c69551f0b6a70ab3dd22b26148db7d2c07ba))
+* **deps:** update anthropics/claude-code-action action to v1.0.170 ([#47](https://github.com/bakerkj/ha-recorder-downsampler/issues/47)) ([f1dbcc5](https://github.com/bakerkj/ha-recorder-downsampler/commit/f1dbcc55c086c52e426c1f1ef8089f2b7ba670ca))
+* **deps:** update anthropics/claude-code-action action to v1.0.181 ([#58](https://github.com/bakerkj/ha-recorder-downsampler/issues/58)) ([0ccff60](https://github.com/bakerkj/ha-recorder-downsampler/commit/0ccff603c13dc6fd2f543a7b27036e5368d62ec1))
+* **deps:** update astral-sh/setup-uv action to v8.3.0 ([#43](https://github.com/bakerkj/ha-recorder-downsampler/issues/43)) ([74494cb](https://github.com/bakerkj/ha-recorder-downsampler/commit/74494cb9c1450767f24f94ac56b6f53373aaa362))
+* **deps:** update astral-sh/setup-uv action to v9 ([#54](https://github.com/bakerkj/ha-recorder-downsampler/issues/54)) ([a81d199](https://github.com/bakerkj/ha-recorder-downsampler/commit/a81d1995043811bba46184f3872d5c1b794527dc))
+* **deps:** update github-actions ([#40](https://github.com/bakerkj/ha-recorder-downsampler/issues/40)) ([070ad6a](https://github.com/bakerkj/ha-recorder-downsampler/commit/070ad6aad5b826fdb47f597bc851d098cac63cc6))
+* **deps:** update github-actions ([#45](https://github.com/bakerkj/ha-recorder-downsampler/issues/45)) ([2302713](https://github.com/bakerkj/ha-recorder-downsampler/commit/230271356066e2b8ced2576ce0f3b0aeb4ef01e3))
+* **deps:** update github-actions ([#50](https://github.com/bakerkj/ha-recorder-downsampler/issues/50)) ([73a592c](https://github.com/bakerkj/ha-recorder-downsampler/commit/73a592ca6c98cd92c93d7cb428297dca4cbd6b75))
+* **deps:** update github-actions ([#52](https://github.com/bakerkj/ha-recorder-downsampler/issues/52)) ([9b9ac9c](https://github.com/bakerkj/ha-recorder-downsampler/commit/9b9ac9cabf445bfb730ace43566db8e254013906))
+* **deps:** update pre-commit hook astral-sh/ruff-pre-commit to v0.16.0 ([#56](https://github.com/bakerkj/ha-recorder-downsampler/issues/56)) ([d100a5e](https://github.com/bakerkj/ha-recorder-downsampler/commit/d100a5e03eb1369e37236f3604274dac68ea152a))
+* **deps:** update pre-commit hook python-jsonschema/check-jsonschema to v0.37.4 ([#38](https://github.com/bakerkj/ha-recorder-downsampler/issues/38)) ([61c4002](https://github.com/bakerkj/ha-recorder-downsampler/commit/61c400214dfd5330b2d9786621333b4879ca7eef))
+* **deps:** update pre-commit hook rbubley/mirrors-prettier to v3.9.4 ([#41](https://github.com/bakerkj/ha-recorder-downsampler/issues/41)) ([f870e08](https://github.com/bakerkj/ha-recorder-downsampler/commit/f870e088ed82a60ce58cf216457dbe57faddf7d0))
+* **deps:** update pre-commit hook rbubley/mirrors-prettier to v3.9.6 ([#55](https://github.com/bakerkj/ha-recorder-downsampler/issues/55)) ([0011ce9](https://github.com/bakerkj/ha-recorder-downsampler/commit/0011ce9dbc3cc240d2bdbbba908af5320811880b))
+* **deps:** update pre-commit hooks ([#48](https://github.com/bakerkj/ha-recorder-downsampler/issues/48)) ([683c874](https://github.com/bakerkj/ha-recorder-downsampler/commit/683c87438f63115325bd0f134ee681dae9835c28))
+* **deps:** update pre-commit hooks ([#49](https://github.com/bakerkj/ha-recorder-downsampler/issues/49)) ([9170ba7](https://github.com/bakerkj/ha-recorder-downsampler/commit/9170ba7f7aab2da081ea46ef06b2713c9271b3c5))
+* **renovate:** drop redundant alternation in npm-in-pre-commit regex ([#53](https://github.com/bakerkj/ha-recorder-downsampler/issues/53)) ([da810fe](https://github.com/bakerkj/ha-recorder-downsampler/commit/da810fe3dbadba0704fbadfb9eda87764ae6df44))
+
+
+### Documentation
+
+* add MIT license ([#44](https://github.com/bakerkj/ha-recorder-downsampler/issues/44)) ([dde0a5f](https://github.com/bakerkj/ha-recorder-downsampler/commit/dde0a5fb7c5c3a5ffdc4cd49aa0ddf8da3ae2f55))
+
+
+### Tests
+
+* guard disable_http_server fixture for HA dev ([#46](https://github.com/bakerkj/ha-recorder-downsampler/issues/46)) ([6c5305e](https://github.com/bakerkj/ha-recorder-downsampler/commit/6c5305e0cf7b50dce244d4f94f0bf31b33ce85b5))
+
 ## [0.0.4](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.3...v0.0.4) (2026-06-28)
 
 
