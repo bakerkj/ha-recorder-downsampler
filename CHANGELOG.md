@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.6](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.5...v0.0.6) (2026-07-26)
+
+
+### Miscellaneous Chores
+
+* **deps:** update anthropics/claude-code-action action to v1.0.183 ([#59](https://github.com/bakerkj/ha-recorder-downsampler/issues/59)) ([5e699bc](https://github.com/bakerkj/ha-recorder-downsampler/commit/5e699bcb5d12fd2ace06e22a2267c9e7f28eb3e9))
+* update uv.lock ([#62](https://github.com/bakerkj/ha-recorder-downsampler/issues/62)) ([a30d842](https://github.com/bakerkj/ha-recorder-downsampler/commit/a30d842be386facf70bc4e1ea500140d385b9aba))
+
+
+### Continuous Integration
+
+* add hassfest manifest validation ([#61](https://github.com/bakerkj/ha-recorder-downsampler/issues/61)) ([fc12130](https://github.com/bakerkj/ha-recorder-downsampler/commit/fc12130c9eb9c09bb0ae68aa464b8c348eb6b2dd))
+
 ## [0.0.5](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.4...v0.0.5) (2026-07-24)
 
 
