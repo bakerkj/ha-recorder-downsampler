@@ -26,6 +26,11 @@
           "path": "custom_components/recorder_downsampler/manifest.json",
           "jsonpath": "$.version"
         },
+        {
+          "type": "json",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='ha-recorder-downsampler')].version"
+        },
         "pyproject.toml"
       ]
     }
