@@ -84,8 +84,9 @@ async def async_setup_entry(
         if live:
             async_add_entities([DownsampleSensor(hass, t) for t in live])
             manager.mark_created(live)
-        # Co-own the source devices so they also show under our integration card.
-        manager.reconcile_device_ownership()
+        # Shed any device our config entry still owns; mirrors reach the
+        # source's device card through the entity registry instead.
+        manager.release_device_ownership()
 
     if hass.state is CoreState.running:
         # Reload / runtime add / tests: sources are already up — create now.

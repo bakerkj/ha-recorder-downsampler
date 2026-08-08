@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Kenneth Baker <bakerkj@umich.edu>
 # All rights reserved.
 """The manager: resolves rules into Targets and drives platform (re)loads,
-orphan Repairs, device co-ownership, and statistics backfill."""
+orphan Repairs, device ownership release, and statistics backfill."""
 
 from __future__ import annotations
 
@@ -107,15 +107,12 @@ class RecorderDownsampleManager:
     ) -> None:
         self.hass = hass
         self.config = config
-        # The config entry that owns our mirrors; None until set up via an entry
-        # (enables device co-ownership). Set by async_setup_entry.
+        # The config entry that owns our mirrors; None until set up via an
+        # entry. Set by async_setup_entry.
         self.entry_id = entry_id
         # Targets we've already handed to the sensor platform, keyed by
         # unique_id, so a reload can tell new / changed / orphaned apart.
         self._created: dict[str, Target] = {}
-        # Source devices we've added our config entry to, so we can drop the
-        # ones we no longer mirror on a reload.
-        self._coowned_devices: set[str] = set()
         # Mirror unique_ids the user chose to keep despite their source being
         # disabled (a Repairs "ignore"). Persisted so we don't re-raise on
         # restart; cleaned when the source comes back. Loaded by async_load.
@@ -308,8 +305,8 @@ class RecorderDownsampleManager:
         # as a Repairs issue (never auto-deleted) — see reconcile_orphans.
         self.reconcile_orphans()
 
-        # Co-own newly-mirrored source devices; drop ones no longer mirrored.
-        self.reconcile_device_ownership()
+        # Shed any device our config entry still owns (see the method docstring).
+        self.release_device_ownership()
 
         # Reload is like startup for backfill too: graft any newly-eligible
         # mirror (a rule that just turned backfill_history on). Background +
@@ -714,34 +711,29 @@ class RecorderDownsampleManager:
     def mark_created(self, targets: list[Target]) -> None:
         self._created.update((t.unique_id, t) for t in targets)
 
-    def reconcile_device_ownership(self) -> None:
-        """Co-own every source device our live mirrors attach to.
+    def release_device_ownership(self) -> None:
+        """Drop our config entry from every device it still holds.
 
-        Adds our config entry to each distinct source device (so that device
-        also appears under the Recorder Downsampler card), and drops our entry
-        from devices we no longer mirror. One ``async_update_device`` per device
-        added/removed; a no-op until the integration has a config entry. (When
-        the entry is fully removed, HA clears us from all devices itself.)
+        Our mirrors reach their source's device card through the entity
+        registry (``DownsampleSensor._link_to_source_device``); the config entry
+        itself must own no device. Earlier versions additionally co-owned each
+        source device so it appeared under the Recorder Downsampler card too —
+        HA 2026.8 restricts a device to a single config entry, so that is no
+        longer possible and the capability has no replacement.
+
+        ``remove_config_entry_id`` does the right thing on either side of that
+        change. On HA 2026.8 the migration split each co-owned device and left
+        us holding an empty duplicate of the source's device, which we are the
+        sole owner of, so this removes it. On earlier releases the same call
+        just drops our co-ownership and leaves the source integration's device
+        intact.
+
+        HA will not do this for us: ``device_registry.async_cleanup`` only
+        reaps devices that no config entry references, and these reference ours.
+        Idempotent — once we own nothing it is a no-op.
         """
         if self.entry_id is None:
             return
-        ent_reg = er.async_get(self.hass)
         dev_reg = dr.async_get(self.hass)
-
-        wanted: set[str] = set()
-        for target in self._created.values():
-            src = ent_reg.async_get(target.source_entity_id)
-            if src is not None and src.device_id is not None:
-                wanted.add(src.device_id)
-
-        for device_id in wanted - self._coowned_devices:
-            if dev_reg.async_get(device_id) is not None:
-                dev_reg.async_update_device(
-                    device_id, add_config_entry_id=self.entry_id
-                )
-        for device_id in self._coowned_devices - wanted:
-            if dev_reg.async_get(device_id) is not None:
-                dev_reg.async_update_device(
-                    device_id, remove_config_entry_id=self.entry_id
-                )
-        self._coowned_devices = wanted
+        for device in list(dr.async_entries_for_config_entry(dev_reg, self.entry_id)):
+            dev_reg.async_update_device(device.id, remove_config_entry_id=self.entry_id)
