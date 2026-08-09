@@ -2552,10 +2552,18 @@ async def test_existing_mirror_is_adopted_not_duplicated(
     assert len(matches) == 1  # exactly one mirror, not duplicated
 
 
-async def test_co_owns_source_device(recorder_hass: HomeAssistant) -> None:
-    """Setup adds our config entry to the source's device, so the SAME device
-    shows under both the source integration's card and ours."""
-    hass = recorder_hass
+def _owned_device_ids(hass: HomeAssistant, entry_id: str) -> set[str]:
+    """Device ids owned by ``entry_id``, independent of HA version.
+
+    Reads through the registry helper rather than DeviceEntry, whose ownership
+    attribute changed name in HA 2026.8 (config_entries -> config_entry_id).
+    """
+    dev_reg = dr.async_get(hass)
+    return {d.id for d in dr.async_entries_for_config_entry(dev_reg, entry_id)}
+
+
+def _make_source_device(hass: HomeAssistant) -> tuple[MockConfigEntry, str]:
+    """A power_monitor config entry owning a device that hosts SOURCE."""
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
     monitor = MockConfigEntry(domain="power_monitor")
@@ -2572,48 +2580,93 @@ async def test_co_owns_source_device(recorder_hass: HomeAssistant) -> None:
         device_id=device.id,
     )
     assert src.entity_id == SOURCE
+    return monitor, device.id
+
+
+async def test_mirror_joins_source_device_without_co_owning_it(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """The mirror shows on the source's device card, but we own no device.
+
+    HA 2026.8 restricts a device to a single config entry, so co-owning the
+    source's device is no longer possible. The mirror still lands on that
+    device — via the entity registry, which permits an entity and its device to
+    belong to different integrations.
+    """
+    hass = recorder_hass
+    monitor, device_id = _make_source_device(hass)
     hass.states.async_set(SOURCE, "100", MEAS)
 
     await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
 
     ours = hass.config_entries.async_entries(DOMAIN)[0]
-    dev = _device(hass, device.id)
-    assert ours.entry_id in dev.config_entries  # co-owned -> shows on our card
-    assert monitor.entry_id in dev.config_entries  # still the source integration's
+
+    # The mirror sits on the source's device...
+    assert _entry(hass, MIRROR).device_id == device_id
+    # ...which still belongs to the source integration, not to us. Asserted
+    # through async_entries_for_config_entry rather than DeviceEntry
+    # config_entry_id / config_entries, which differ across HA versions.
+    assert _owned_device_ids(hass, monitor.entry_id) == {device_id}
+    assert _owned_device_ids(hass, ours.entry_id) == set()
 
 
-async def test_drops_co_ownership_when_mirror_torn_down(
+async def test_setup_sheds_a_device_our_entry_still_owns(
     recorder_hass: HomeAssistant,
 ) -> None:
-    """Tearing a mirror down drops our device co-ownership (but the source
-    integration keeps the device).
+    """A device left owned by our entry is released on the next reconcile.
+
+    This is the state HA 2026.8's migration leaves behind for anyone upgrading
+    from a version that co-owned source devices: the co-owned device is split,
+    and the copy owned by our config entry lingers with nothing on it. HA's own
+    ``async_cleanup`` will not reap it — it spares any device a config entry
+    references — so we shed it ourselves.
+    """
+    hass = recorder_hass
+    _make_source_device(hass)
+    hass.states.async_set(SOURCE, "100", MEAS)
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+
+    ours = hass.config_entries.async_entries(DOMAIN)[0]
+    dev_reg = dr.async_get(hass)
+    stray = dev_reg.async_get_or_create(
+        config_entry_id=ours.entry_id, identifiers={(DOMAIN, "stray-split")}
+    )
+    assert _owned_device_ids(hass, ours.entry_id) == {stray.id}
+
+    # Any reconcile re-runs the release; a config update is the cheapest trigger.
+    manager = hass.data[DOMAIN][DATA_MANAGER]
+    manager.update_config(
+        CONFIG_SCHEMA(
+            {
+                DOMAIN: {
+                    CONF_WARN_UNEXCLUDED: False,
+                    CONF_INTERVAL: "00:00:10",
+                    CONF_RULES: [{"name": "demo", "entity_ids": [SOURCE]}],
+                }
+            }
+        )[DOMAIN]
+    )
+    await hass.async_block_till_done()
+
+    assert dev_reg.async_get(stray.id) is None
+    assert _owned_device_ids(hass, ours.entry_id) == set()
+
+
+async def test_teardown_leaves_the_source_device_intact(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """Tearing a mirror down must not disturb the source integration's device.
 
     A true orphan is never auto-deleted now (it raises a Repair instead), so we
     exercise the teardown via an explicit dry_run flip, which does remove the
     live mirror.
     """
     hass = recorder_hass
-    ent_reg = er.async_get(hass)
-    dev_reg = dr.async_get(hass)
-    monitor = MockConfigEntry(domain="power_monitor")
-    monitor.add_to_hass(hass)
-    device = dev_reg.async_get_or_create(
-        config_entry_id=monitor.entry_id, identifiers={("power_monitor", "pm1")}
-    )
-    ent_reg.async_get_or_create(
-        "sensor",
-        "power_monitor",
-        "chan1",
-        suggested_object_id="demo_power",
-        config_entry=monitor,
-        device_id=device.id,
-    )
+    monitor, device_id = _make_source_device(hass)
     hass.states.async_set(SOURCE, "100", MEAS)
     await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
-    ours = hass.config_entries.async_entries(DOMAIN)[0]
-    assert ours.entry_id in _device(hass, device.id).config_entries
 
-    # Flip the rule to dry_run -> mirror torn down -> co-ownership dropped.
+    # Flip the rule to dry_run -> mirror torn down.
     manager = hass.data[DOMAIN][DATA_MANAGER]
     dry = CONFIG_SCHEMA(
         {
@@ -2628,9 +2681,7 @@ async def test_drops_co_ownership_when_mirror_torn_down(
     await hass.async_block_till_done()
 
     assert hass.states.get(MIRROR) is None
-    dev = _device(hass, device.id)
-    assert ours.entry_id not in dev.config_entries  # we dropped it
-    assert monitor.entry_id in dev.config_entries  # source integration keeps it
+    assert _owned_device_ids(hass, monitor.entry_id) == {device_id}
 
 
 async def test_mirror_value_published_at_creation(

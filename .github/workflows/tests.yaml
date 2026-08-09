@@ -6,15 +6,86 @@ on:
   pull_request:
 
 jobs:
-  tests:
+  versions:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
+    strategy:
+      # Report both results; a failure on one version is useful to see next to
+      # a pass on the other.
+      fail-fast: false
+      matrix:
+        include:
+          # CEILING — the newest Home Assistant this is expected to work on.
+          # Pinned here rather than left to uv.lock: nothing in pyproject
+          # constrains homeassistant (the dev group only floors the test plugin
+          # with `>=`), so the lock drifts behind and Renovate has no `==` to
+          # bump. Raise this when a new HA minor ships.
+          - name: HA ceiling (2026.8)
+            slug: ha-ceiling
+            ha: homeassistant==2026.8.*
+          # FLOOR — the oldest release exercised on every PR. Pinned here
+          # rather than in pyproject so Renovate cannot see it: lowering the
+          # tested range should be a deliberate decision, not a merged
+          # dependency PR.
+          #
+          # It has to run: release_device_ownership() takes two different paths
+          # by version. From 2026.8 `remove_config_entry_id` deletes the
+          # duplicate device we solely own; before that the identical call just
+          # drops co-ownership and leaves the source integration's device alone.
+          # That is why it needs no version check — and why testing one version
+          # only ever exercises one of the two branches.
+          #
+          # Kept equal to the `homeassistant` key in hacs.json, so what is
+          # advertised is what is actually exercised. Raise both together.
+          - name: HA floor (2026.7)
+            slug: ha-floor
+            ha: homeassistant==2026.7.*
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
-          cache-suffix: tests
+          cache-suffix: tests-${{ matrix.slug }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: .python-version
-      - run: uv run python -m pytest tests/ --ignore=tests/integration -v
+
+      - name: Install the locked environment
+        run: uv sync
+
+      # Imperative, so it overrides the locked homeassistant without having to
+      # relax anything in pyproject. The test plugin is named unpinned so uv
+      # re-resolves it to the release matching the requested HA (it pins HA
+      # exactly, so leaving the locked one installed would conflict). Later
+      # steps pass --no-sync so uv doesn't restore the lockfile version.
+      - name: Select the Home Assistant under test
+        run: >-
+          uv pip install "${{ matrix.ha }}"
+          pytest-homeassistant-custom-component
+
+      - name: Home Assistant under test
+        run: >-
+          uv run --no-sync python -c "from homeassistant.const import
+          __version__; print(__version__)"
+
+      - name: Unit tests
+        run: >-
+          uv run --no-sync python -m pytest tests/ --ignore=tests/integration -v
+
+  # Stable name for branch protection to require. The matrix jobs are named
+  # after the HA version they run, so their check names move every time the
+  # floor or ceiling is bumped — a required check pinned to one of those would
+  # silently stop reporting and block every PR forever. This one never changes
+  # its name and just mirrors the matrix result.
+  #
+  # `if: always()` matters: without it this is skipped when a matrix leg fails,
+  # the required check never reports, and the PR is blocked rather than failed.
+  tests:
+    needs: versions
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Mirror the matrix result
+        run: |
+          echo "matrix result: ${{ needs.versions.result }}"
+          [ "${{ needs.versions.result }}" = "success" ]

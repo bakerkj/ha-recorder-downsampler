@@ -25,6 +25,7 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.device import async_entity_id_to_device
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -84,8 +85,9 @@ async def async_setup_entry(
         if live:
             async_add_entities([DownsampleSensor(hass, t) for t in live])
             manager.mark_created(live)
-        # Co-own the source devices so they also show under our integration card.
-        manager.reconcile_device_ownership()
+        # Shed any device our config entry still owns; mirrors reach the
+        # source's device card through the entity registry instead.
+        manager.release_device_ownership()
 
     if hass.state is CoreState.running:
         # Reload / runtime add / tests: sources are already up — create now.
@@ -197,7 +199,16 @@ class DownsampleSensor(SensorEntity):
             ENTITY_ID_FORMAT, f"{object_id}{ENTITY_ID_SUFFIX}", hass=hass
         )
         self._attr_name = self._derive_name()
-        self._source_device_id = self._derive_source_device_id()
+        # Put the mirror on the source's device card. Set before the entity is
+        # added so it is registered on the right device outright: HA reads
+        # `device_entry` when `device_info` is None and passes the id straight
+        # into the entity registry. (DeviceInfo cannot be used — it describes a
+        # device to find-or-create, and from HA 2026.8 that lookup is scoped to
+        # our own config entry, so it would miss the source's device and make a
+        # duplicate.) Re-derived on every reload, and async_get_or_create
+        # re-points an existing mirror, so a source that moves device is
+        # followed.
+        self.device_entry = async_entity_id_to_device(hass, self._source)
         if (state := self.hass.states.get(self._source)) is not None:
             self._refresh_source_metadata(state.attributes)
 
@@ -211,11 +222,6 @@ class DownsampleSensor(SensorEntity):
         if not base:
             base = self._source.split(".", 1)[1].replace("_", " ").title()
         return f"{base}{NAME_SUFFIX}"
-
-    def _derive_source_device_id(self) -> str | None:
-        """The registry device_id of the source, if the source has one."""
-        src = er.async_get(self.hass).async_get(self._source)
-        return src.device_id if src else None
 
     def _source_display_precision(self) -> int | None:
         """The source's effective display precision: its display_precision
@@ -352,7 +358,6 @@ class DownsampleSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to the source and start the emit timer."""
-        self._link_to_source_device()
         self._init_display_precision()
         self.async_on_remove(
             async_track_state_change_event(
@@ -412,23 +417,6 @@ class DownsampleSensor(SensorEntity):
                     self._start_timer()
                 self.async_write_ha_state()  # refresh exposed attributes
                 return
-
-    @callback
-    def _link_to_source_device(self) -> None:
-        """Attach this mirror onto the source's existing device card.
-
-        The mirror is owned by our config entry, but its device belongs to the
-        source's own integration. DeviceInfo can't link
-        across integrations, so we link this mirror to the source's device
-        directly through the entity registry, which allows it.
-        """
-        if self._source_device_id is None:
-            return
-        ent_reg = er.async_get(self.hass)
-        entry = ent_reg.async_get(self.entity_id)
-        if entry is None or entry.device_id == self._source_device_id:
-            return
-        ent_reg.async_update_entity(self.entity_id, device_id=self._source_device_id)
 
     @callback
     def _handle_source_event(self, event: Event[EventStateChangedData]) -> None:
