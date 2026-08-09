@@ -714,9 +714,9 @@ class RecorderDownsampleManager:
     def release_device_ownership(self) -> None:
         """Drop our config entry from every device it still holds.
 
-        Our mirrors reach their source's device card through the entity
-        registry (``DownsampleSensor._link_to_source_device``); the config entry
-        itself must own no device. Earlier versions additionally co-owned each
+        Our mirrors reach their source's device card by pointing at it —
+        ``DownsampleSensor`` sets ``device_entry`` — so the config entry itself
+        must own no device. Earlier versions additionally co-owned each
         source device so it appeared under the Recorder Downsampler card too —
         HA 2026.8 restricts a device to a single config entry, so that is no
         longer possible and the capability has no replacement.
