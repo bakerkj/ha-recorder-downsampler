@@ -721,19 +721,38 @@ class RecorderDownsampleManager:
         HA 2026.8 restricts a device to a single config entry, so that is no
         longer possible and the capability has no replacement.
 
-        ``remove_config_entry_id`` does the right thing on either side of that
-        change. On HA 2026.8 the migration split each co-owned device and left
-        us holding an empty duplicate of the source's device, which we are the
-        sole owner of, so this removes it. On earlier releases the same call
-        just drops our co-ownership and leaves the source integration's device
-        intact.
+        A device we still have entities on is left alone, and that guard is the
+        whole safety of this method. Dropping a config entry from a device is
+        not a bookkeeping change: ``entity_registry.async_device_modified``
+        watches for it and **deletes** every entity of that entry sitting on
+        that device ("remove entities which belong to config entries no longer
+        associated with the device"). Calling this on a device still holding our
+        mirrors therefore destroys them — their registry entries, and with them
+        any name, area or precision the user had set. Recorder history survives,
+        keyed on entity_id, but the entities have to be recreated.
 
-        HA will not do this for us: ``device_registry.async_cleanup`` only
-        reaps devices that no config entry references, and these reference ours.
-        Idempotent — once we own nothing it is a no-op.
+        With the guard the method still does its job. On HA 2026.8 the migration
+        splits each co-owned device and leaves us sole owner of a copy; once the
+        mirrors have re-homed onto the source's device that copy holds nothing
+        of ours and is removed. Before 2026.8 co-ownership is legitimate and
+        every co-owned device still carries our mirrors, so nothing is touched —
+        the correct outcome there, not an accident.
+
+        HA will not clean these up for us: ``device_registry.async_cleanup``
+        only reaps devices that no config entry references, and these reference
+        ours. Idempotent, and self-correcting — a device skipped now is released
+        on a later pass once its entities have moved.
         """
         if self.entry_id is None:
             return
+        ent_reg = er.async_get(self.hass)
         dev_reg = dr.async_get(self.hass)
         for device in list(dr.async_entries_for_config_entry(dev_reg, self.entry_id)):
+            if any(
+                entry.config_entry_id == self.entry_id
+                for entry in er.async_entries_for_device(
+                    ent_reg, device.id, include_disabled_entities=True
+                )
+            ):
+                continue
             dev_reg.async_update_device(device.id, remove_config_entry_id=self.entry_id)

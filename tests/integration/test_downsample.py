@@ -2822,3 +2822,47 @@ async def test_initial_mirror_creation_waits_for_source_integration(
     st = hass.states.get(MIRROR)
     assert st is not None
     assert float(st.state) == pytest.approx(100.0)
+
+
+@pytest.mark.skipif(
+    hasattr(dr.DeviceEntry, "config_entry_id"),
+    reason="HA 2026.8 restricts a device to one config entry, so add_config_entry_id "
+    "is inert and the co-owned state under test cannot be constructed",
+)
+async def test_co_owned_device_keeps_our_mirrors(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """Releasing ownership must never take our mirrors with it.
+
+    Regression test for a destructive bug. On HA before 2026.8 every source
+    device we co-own also carries our mirrors, and dropping the config entry
+    from such a device makes ``entity_registry.async_device_modified`` delete
+    every entity of that entry on it — the mirrors, with whatever name, area or
+    precision the user had set. It deleted 156 of them on a live system.
+
+    So the device is left alone while it still holds anything of ours, and the
+    mirror must survive both the initial setup and any later reconcile.
+    """
+    hass = recorder_hass
+    monitor, device_id = _make_source_device(hass)
+    hass.states.async_set(SOURCE, "100", MEAS)
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+
+    ours = hass.config_entries.async_entries(DOMAIN)[0]
+    dev_reg = dr.async_get(hass)
+    # Recreate the pre-2026.8 shape: the source device co-owned by us, with our
+    # mirror living on it. This is what every upgrading install looks like.
+    dev_reg.async_update_device(device_id, add_config_entry_id=ours.entry_id)
+    assert device_id in _owned_device_ids(hass, ours.entry_id)
+    assert _entry(hass, MIRROR).device_id == device_id
+
+    manager = hass.data[DOMAIN][DATA_MANAGER]
+    manager.release_device_ownership()
+    await hass.async_block_till_done()
+
+    # The mirror is still registered, still on the source's device.
+    assert _entry(hass, MIRROR) is not None
+    assert _entry(hass, MIRROR).device_id == device_id
+    assert hass.states.get(MIRROR) is not None
+    # And the source integration still has its device.
+    assert device_id in _owned_device_ids(hass, monitor.entry_id)
