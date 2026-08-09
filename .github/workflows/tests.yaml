@@ -35,13 +35,8 @@ jobs:
           # That is why it needs no version check — and why testing one version
           # only ever exercises one of the two branches.
           #
-          # Note this is above the 2026.1.0 floor hacs.json advertises. The code
-          # does run there — 165 passed locally on 2026.1.3 — but resolving a
-          # test environment that far back drags unrelated transitive deps into
-          # conflict (litellm/pydantic-settings), which says nothing about this
-          # integration. 2026.7 is the oldest that resolves cleanly, and it
-          # still straddles the 2026.8 device-registry change, which is the
-          # boundary that actually matters here.
+          # Kept equal to the `homeassistant` key in hacs.json, so what is
+          # advertised is what is actually exercised. Raise both together.
           - name: HA floor (2026.7)
             slug: ha-floor
             ha: homeassistant==2026.7.*
