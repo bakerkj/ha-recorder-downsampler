@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  integration-tests:
+  versions:
     name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
     strategy:
@@ -50,3 +50,21 @@ jobs:
 
       - name: Integration tests
         run: uv run --no-sync python -m pytest tests/integration/ -v
+
+  # Stable name for branch protection to require. The matrix jobs are named
+  # after the HA version they run, so their check names move every time the
+  # floor or ceiling is bumped — a required check pinned to one of those would
+  # silently stop reporting and block every PR forever. This one never changes
+  # its name and just mirrors the matrix result.
+  #
+  # `if: always()` matters: without it this is skipped when a matrix leg fails,
+  # the required check never reports, and the PR is blocked rather than failed.
+  integration-tests:
+    needs: versions
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Mirror the matrix result
+        run: |
+          echo "matrix result: ${{ needs.versions.result }}"
+          [ "${{ needs.versions.result }}" = "success" ]
