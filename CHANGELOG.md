@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.0.7](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.6...v0.0.7) (2026-08-09)
+
+
+### Bug Fixes
+
+* **pre-commit:** set default_stages so hooks skip commit-msg by default ([#73](https://github.com/bakerkj/ha-recorder-downsampler/issues/73)) ([4901ac8](https://github.com/bakerkj/ha-recorder-downsampler/commit/4901ac85adc7b9f93177b0df26fec2592edaed0e))
+* release device ownership instead of co-owning source devices ([#78](https://github.com/bakerkj/ha-recorder-downsampler/issues/78)) ([9aae6aa](https://github.com/bakerkj/ha-recorder-downsampler/commit/9aae6aa83d5a4f0108626c52dfded9ad373d98d6))
+* scope dev-tooling auto-merge by depType ([#71](https://github.com/bakerkj/ha-recorder-downsampler/issues/71)) ([fcf90bc](https://github.com/bakerkj/ha-recorder-downsampler/commit/fcf90bcadf1f469cec3adbc224943a31773119aa))
+* use toml updater type for uv.lock in release-please ([#64](https://github.com/bakerkj/ha-recorder-downsampler/issues/64)) ([df423a6](https://github.com/bakerkj/ha-recorder-downsampler/commit/df423a6f2a0b13890b5c9504b5f3b41a7bf8454d))
+
+
+### Miscellaneous Chores
+
+* **deps:** pin uv to 0.12.2 ([#72](https://github.com/bakerkj/ha-recorder-downsampler/issues/72)) ([6ac93fd](https://github.com/bakerkj/ha-recorder-downsampler/commit/6ac93fd5f56352b78172b46d86cd78637e1938cb))
+* **deps:** update anthropics/claude-code-action action to v1.0.184 ([#74](https://github.com/bakerkj/ha-recorder-downsampler/issues/74)) ([2ad3aae](https://github.com/bakerkj/ha-recorder-downsampler/commit/2ad3aae730331cead9343e50e811a2e111e5b59e))
+* **deps:** update dependency uv to ==0.12.* ([#66](https://github.com/bakerkj/ha-recorder-downsampler/issues/66)) ([f974f1a](https://github.com/bakerkj/ha-recorder-downsampler/commit/f974f1ae949ee7cfcbfd259055f9ae513552fc49))
+* **deps:** update dependency uv to v0.12.3 ([#76](https://github.com/bakerkj/ha-recorder-downsampler/issues/76)) ([bbdba0f](https://github.com/bakerkj/ha-recorder-downsampler/commit/bbdba0f987da97b3e9cfcdf1c7ad582e25f7558c))
+* **deps:** update github-actions ([#75](https://github.com/bakerkj/ha-recorder-downsampler/issues/75)) ([355f55f](https://github.com/bakerkj/ha-recorder-downsampler/commit/355f55fc33e4d462404834e0f2703160f4b8a30e))
+* **deps:** update home-assistant/actions digest to ab22029 ([#69](https://github.com/bakerkj/ha-recorder-downsampler/issues/69)) ([5f8f1f1](https://github.com/bakerkj/ha-recorder-downsampler/commit/5f8f1f11876c531114fe2ee67653601690712023))
+* **deps:** update j178/prek-action action to v3 ([#68](https://github.com/bakerkj/ha-recorder-downsampler/issues/68)) ([b60243e](https://github.com/bakerkj/ha-recorder-downsampler/commit/b60243e77b9ad9f2d6779d89b77a2def06d0bb2e))
+* **deps:** update pre-commit hook astral-sh/ruff-pre-commit to v0.16.1 ([#67](https://github.com/bakerkj/ha-recorder-downsampler/issues/67)) ([dc84655](https://github.com/bakerkj/ha-recorder-downsampler/commit/dc846557e9f8ad22e36c143ce10beb8ee9ff4272))
+* **deps:** update pre-commit hook astral-sh/ruff-pre-commit to v0.16.2 ([#77](https://github.com/bakerkj/ha-recorder-downsampler/issues/77)) ([d25050f](https://github.com/bakerkj/ha-recorder-downsampler/commit/d25050f7cef58f5856be69b099cd85c8ff34dcd5))
+* **deps:** update pre-commit hook python-jsonschema/check-jsonschema to v0.38.0 ([#79](https://github.com/bakerkj/ha-recorder-downsampler/issues/79)) ([f815f5e](https://github.com/bakerkj/ha-recorder-downsampler/commit/f815f5e1951463e88d00af6bee39c6e268e3cc72))
+* keep uv.lock project version synced with release-please ([#63](https://github.com/bakerkj/ha-recorder-downsampler/issues/63)) ([8c4e93b](https://github.com/bakerkj/ha-recorder-downsampler/commit/8c4e93b3e0fdb3da925377187f1206563e4baa14))
+
+
+### Continuous Integration
+
+* enable renovate auto-merge for CI-only updates ([#70](https://github.com/bakerkj/ha-recorder-downsampler/issues/70)) ([d9489d0](https://github.com/bakerkj/ha-recorder-downsampler/commit/d9489d02925307be75c462b50b9e87e3fa47952a))
+
 ## [0.0.6](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.5...v0.0.6) (2026-07-26)
 
 
