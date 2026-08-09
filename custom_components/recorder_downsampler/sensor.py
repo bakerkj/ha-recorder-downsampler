@@ -237,6 +237,32 @@ class DownsampleSensor(SensorEntity):
             else opts.get("suggested_display_precision")
         )
 
+    @callback
+    def _seed_area_from_source(self) -> None:
+        """Give a device-less mirror the area of its source.
+
+        A mirror that sits on a device inherits that device's area, so there is
+        nothing to store per entity — which is why most mirrors carry no
+        ``area_id`` of their own. A source with no device (a template sensor,
+        say) leaves its mirror nothing to inherit from, so take the area from
+        the source entity itself.
+
+        Only ever fills a blank. If the mirror already has an area it is left
+        alone, whether that area was set by the user or restored by HA from a
+        previously deleted entry — so this can run on every startup without
+        overwriting a deliberate choice.
+        """
+        if self.device_entry is not None:
+            return
+        ent_reg = er.async_get(self.hass)
+        entry = ent_reg.async_get(self.entity_id)
+        if entry is None or entry.area_id is not None:
+            return
+        source = ent_reg.async_get(self._source)
+        if source is None or source.area_id is None:
+            return
+        ent_reg.async_update_entity(self.entity_id, area_id=source.area_id)
+
     def _init_display_precision(self) -> None:
         """Apply the configured display-precision policy (never / once / track)."""
         mode = self._copy_display_precision
@@ -358,6 +384,7 @@ class DownsampleSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to the source and start the emit timer."""
+        self._seed_area_from_source()
         self._init_display_precision()
         self.async_on_remove(
             async_track_state_change_event(
