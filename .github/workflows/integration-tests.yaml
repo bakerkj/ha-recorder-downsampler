@@ -7,14 +7,46 @@ on:
 
 jobs:
   integration-tests:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
+    strategy:
+      # Report both results; a failure on one version is useful to see next to
+      # a pass on the other.
+      fail-fast: false
+      matrix:
+        include:
+          # Kept in step with the matrix in tests.yaml — see the reasoning
+          # there. It matters more here: the device-ownership tests live in
+          # this suite, and release_device_ownership() is exactly the code
+          # whose behaviour differs between the floor and the ceiling.
+          - name: HA ceiling (2026.8)
+            slug: ha-ceiling
+            ha: homeassistant==2026.8.*
+          - name: HA floor (2026.1)
+            slug: ha-floor
+            ha: homeassistant==2026.1.*
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
-          cache-suffix: integration-tests
+          cache-suffix: integration-tests-${{ matrix.slug }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: .python-version
-      - run: uv run python -m pytest tests/integration/ -v
+
+      - name: Install the locked environment
+        run: uv sync
+
+      - name: Select the Home Assistant under test
+        run: >-
+          uv pip install "${{ matrix.ha }}"
+          pytest-homeassistant-custom-component
+
+      - name: Home Assistant under test
+        run: >-
+          uv run --no-sync python -c "from homeassistant.const import
+          __version__; print(__version__)"
+
+      - name: Integration tests
+        run: uv run --no-sync python -m pytest tests/integration/ -v
