@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.8](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.7...v0.0.8) (2026-08-10)
+
+
+### Bug Fixes
+
+* never release a device that still holds our mirrors ([#80](https://github.com/bakerkj/ha-recorder-downsampler/issues/80)) ([d864291](https://github.com/bakerkj/ha-recorder-downsampler/commit/d86429190f9f841dd29b43d98c7b37995d4154a4))
+
 ## [0.0.7](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.6...v0.0.7) (2026-08-09)
 
 
