@@ -2936,3 +2936,112 @@ async def test_a_users_area_is_never_overwritten(
         await hass.async_block_till_done()
 
     assert _entry(hass, MIRROR).area_id == chosen.id
+
+
+# ---------------------------------------------------------------------------
+# Naming. HA's device page strips the device name from the front of each entity
+# name, so a mirror of a source that IS its device's main entity would show as
+# bare "(DS)" — the source's name and the device's are the same string.
+# ---------------------------------------------------------------------------
+
+
+def _named_source_device(
+    hass: HomeAssistant, *, device_name: str, source_name: str | None, device_class: str
+) -> str:
+    """A device hosting SOURCE, with control over the source's own name."""
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    monitor = MockConfigEntry(domain="power_monitor")
+    monitor.add_to_hass(hass)
+    device = dev_reg.async_get_or_create(
+        config_entry_id=monitor.entry_id,
+        identifiers={("power_monitor", "pm1")},
+        name=device_name,
+    )
+    ent_reg.async_get_or_create(
+        "sensor",
+        "power_monitor",
+        "chan1",
+        suggested_object_id="demo_power",
+        config_entry=monitor,
+        device_id=device.id,
+        original_name=source_name,
+        original_device_class=device_class,
+    )
+    # friendly_name is what the mirror copies; a main entity carries the
+    # device's name.
+    hass.states.async_set(
+        SOURCE, "100", {**MEAS, "friendly_name": source_name or device_name}
+    )
+    return device_name
+
+
+async def test_unnamed_source_borrows_its_device_class(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """A source named for its device gets the device class as a qualifier."""
+    hass = recorder_hass
+    _named_source_device(
+        hass, device_name="GEM channel 3", source_name=None, device_class="power"
+    )
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+
+    # Without the qualifier this reads "GEM channel 3 (DS)", which the device
+    # page strips down to "(DS)".
+    assert _entry(hass, MIRROR).original_name == "GEM channel 3 Power (DS)"
+
+
+async def test_named_source_keeps_its_own_name(recorder_hass: HomeAssistant) -> None:
+    """A source with a name of its own is left alone — no device class added."""
+    hass = recorder_hass
+    _named_source_device(
+        hass,
+        device_name="1st Floor Bath GCFI",
+        source_name="1st Floor Bath GCFI Energy",
+        device_class="energy",
+    )
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+
+    assert _entry(hass, MIRROR).original_name == "1st Floor Bath GCFI Energy (DS)"
+
+
+async def test_unnamed_source_without_device_class_is_unchanged(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """No device class to borrow — name as before rather than inventing one."""
+    hass = recorder_hass
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    monitor = MockConfigEntry(domain="power_monitor")
+    monitor.add_to_hass(hass)
+    device = dev_reg.async_get_or_create(
+        config_entry_id=monitor.entry_id,
+        identifiers={("power_monitor", "pm1")},
+        name="Bare Device",
+    )
+    ent_reg.async_get_or_create(
+        "sensor",
+        "power_monitor",
+        "chan1",
+        suggested_object_id="demo_power",
+        config_entry=monitor,
+        device_id=device.id,
+    )
+    hass.states.async_set(SOURCE, "100", {"friendly_name": "Bare Device"})
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+
+    assert _entry(hass, MIRROR).original_name == "Bare Device (DS)"
+
+
+async def test_deviceless_source_name_is_unchanged(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """No device means no stripping, so nothing to compensate for."""
+    hass = recorder_hass
+    er.async_get(hass).async_get_or_create(
+        "sensor", "template", "t1", suggested_object_id="demo_power"
+    )
+    hass.states.async_set(SOURCE, "100", {**MEAS, "friendly_name": "Battery 1 Power"})
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+
+    assert _entry(hass, MIRROR).original_name == "Battery 1 Power (DS)"
