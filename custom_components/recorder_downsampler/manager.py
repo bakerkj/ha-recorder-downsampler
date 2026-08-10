@@ -13,11 +13,33 @@ from datetime import timedelta
 from functools import partial
 from typing import Any, cast
 
+# Imported at module level, not lazily inside the functions that use them.
+# A deferred import runs on the event loop the first time it is hit, and an
+# import is not cheap or lock-free: it takes Python's per-module import locks,
+# and `recorder.statistics` in particular drags in SQLAlchemy's query
+# machinery. Doing that on the loop during startup — while other integrations
+# are importing on executor threads — stalls every other integration, and can
+# deadlock outright if any of those imports needs the loop to make progress.
+# `recorder` and `persistent_notification` are both declared dependencies, so
+# they are already set up before us and importing them here is safe.
+from homeassistant.components import persistent_notification
+from homeassistant.components.recorder import is_entity_recorded
+from homeassistant.components.recorder.models import (
+    StatisticData,
+    StatisticMeanType,
+    StatisticMetaData,
+)
+from homeassistant.components.recorder.statistics import (
+    async_import_statistics,
+    get_metadata,
+    statistics_during_period,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -87,10 +109,6 @@ def is_recorded(hass: HomeAssistant, entity_id: str) -> bool | None:
     API is pinned by tests/test_ha_signature_compat.py.
     """
     try:
-        from homeassistant.components.recorder import (
-            is_entity_recorded,
-        )
-
         return bool(is_entity_recorded(hass, entity_id))
     except Exception:  # noqa: BLE001 - best-effort diagnostic only
         return None
@@ -551,8 +569,6 @@ class RecorderDownsampleManager:
         duration: float,
     ) -> None:
         """Fire the completion event and raise/clear persistent notifications."""
-        from homeassistant.components import persistent_notification
-
         self.hass.bus.async_fire(
             EVENT_BACKFILL_COMPLETED,
             {
@@ -632,18 +648,6 @@ class RecorderDownsampleManager:
     async def _async_backfill_one(
         self, mirror_entity_id: str, *, dry_run: bool = False
     ) -> str:
-        from homeassistant.components.recorder.models import (
-            StatisticData,
-            StatisticMeanType,
-            StatisticMetaData,
-        )
-        from homeassistant.components.recorder.statistics import (
-            async_import_statistics,
-            get_metadata,
-            statistics_during_period,
-        )
-        from homeassistant.helpers.recorder import get_instance
-
         ent_reg = er.async_get(self.hass)
         entry = ent_reg.async_get(mirror_entity_id)
         if entry is None or entry.platform != DOMAIN:
