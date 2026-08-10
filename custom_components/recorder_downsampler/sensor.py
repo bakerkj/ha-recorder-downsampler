@@ -10,6 +10,8 @@ so the recorder sees one row per interval. The frontend keeps reading the
 
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
@@ -59,6 +61,8 @@ from .const import (
     NAME_SUFFIX,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -75,22 +79,56 @@ async def async_setup_entry(
     """
     manager: RecorderDownsampleManager = hass.data[DOMAIN][DATA_MANAGER]
 
+    # This whole path runs during startup, interleaved with every other
+    # integration, and a step that blocks the event loop here stalls all of
+    # them. Each step below is logged with the wall time it took, so a hung or
+    # slow start is diagnosable from the log alone: the last line names the step
+    # that was entered, and the elapsed times say which one was expensive.
+    # Debug-level, so it costs nothing unless the integration is turned up.
+
     @callback
     def _create_initial_mirrors(*_: object) -> None:
+        t0 = time.monotonic()
+        _LOGGER.debug("create: resolving targets")
         targets = manager.resolve_targets(log=True)
+        _LOGGER.debug(
+            "create: resolved %d target(s) in %.3fs",
+            len(targets),
+            time.monotonic() - t0,
+        )
         manager.log_rollout(targets)
+
         # Only LIVE targets become entities; dry-run targets are logged but
         # never created (dry_run may be set globally or per rule).
         live = [t for t in targets if not t.dry_run]
         if live:
-            async_add_entities([DownsampleSensor(hass, t) for t in live])
+            t1 = time.monotonic()
+            entities = [DownsampleSensor(hass, t) for t in live]
+            _LOGGER.debug(
+                "create: constructed %d entity object(s) in %.3fs",
+                len(entities),
+                time.monotonic() - t1,
+            )
+            t2 = time.monotonic()
+            async_add_entities(entities)
+            _LOGGER.debug(
+                "create: async_add_entities returned in %.3fs (adds continue async)",
+                time.monotonic() - t2,
+            )
             manager.mark_created(live)
-        # Shed any device our config entry still owns; mirrors reach the
-        # source's device card through the entity registry instead.
+        else:
+            _LOGGER.debug("create: no live targets, nothing to add")
+
+        t3 = time.monotonic()
         manager.release_device_ownership()
+        _LOGGER.debug(
+            "create: released device ownership in %.3fs", time.monotonic() - t3
+        )
+        _LOGGER.debug("create: finished in %.3fs total", time.monotonic() - t0)
 
     if hass.state is CoreState.running:
         # Reload / runtime add / tests: sources are already up — create now.
+        _LOGGER.debug("setup: HA already running — creating mirrors immediately")
         _create_initial_mirrors()
     else:
         # Cold boot: create once the integrations our sources belong to are set
@@ -104,14 +142,28 @@ async def async_setup_entry(
         if not source_domains:
             # Can't tell which integrations to wait for — fall back to the end
             # of startup so we still create before HA is fully up.
+            _LOGGER.debug(
+                "setup: cold boot, no source domains resolved — deferring to HA started"
+            )
             entry.async_on_unload(async_at_started(hass, _create_initial_mirrors))
         else:
             pending = set(source_domains)
+            _LOGGER.debug(
+                "setup: cold boot, waiting on %d source integration(s): %s",
+                len(pending),
+                ", ".join(sorted(pending)),
+            )
 
             async def _source_component_loaded(
                 _hass: HomeAssistant, component: str
             ) -> None:
                 pending.discard(component)
+                _LOGGER.debug(
+                    "setup: %s set up; still waiting on %d: %s",
+                    component,
+                    len(pending),
+                    ", ".join(sorted(pending)) or "-",
+                )
                 if not pending:
                     _create_initial_mirrors()
 
@@ -209,6 +261,13 @@ class DownsampleSensor(SensorEntity):
         # re-points an existing mirror, so a source that moves device is
         # followed.
         self.device_entry = async_entity_id_to_device(hass, self._source)
+        _LOGGER.debug(
+            "build %s: source=%s device=%s new=%s",
+            self.entity_id,
+            self._source,
+            self.device_entry.id if self.device_entry else None,
+            self._is_new,
+        )
         if (state := self.hass.states.get(self._source)) is not None:
             self._refresh_source_metadata(state.attributes)
 
@@ -253,14 +312,25 @@ class DownsampleSensor(SensorEntity):
         overwriting a deliberate choice.
         """
         if self.device_entry is not None:
+            _LOGGER.debug("area %s: on a device, inherits its area", self.entity_id)
             return
         ent_reg = er.async_get(self.hass)
         entry = ent_reg.async_get(self.entity_id)
-        if entry is None or entry.area_id is not None:
+        if entry is None:
+            _LOGGER.debug("area %s: not registered yet, skipping", self.entity_id)
+            return
+        if entry.area_id is not None:
+            _LOGGER.debug(
+                "area %s: already has area %s, leaving it",
+                self.entity_id,
+                entry.area_id,
+            )
             return
         source = ent_reg.async_get(self._source)
         if source is None or source.area_id is None:
+            _LOGGER.debug("area %s: source has no area to copy", self.entity_id)
             return
+        _LOGGER.debug("area %s: copying source area %s", self.entity_id, source.area_id)
         ent_reg.async_update_entity(self.entity_id, area_id=source.area_id)
 
     def _init_display_precision(self) -> None:
@@ -384,7 +454,11 @@ class DownsampleSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to the source and start the emit timer."""
+        # Bracketed at debug so a startup that wedges names the entity it wedged
+        # on, and which step it reached. Only emitted at debug level.
+        _LOGGER.debug("added %s: seeding area", self.entity_id)
         self._seed_area_from_source()
+        _LOGGER.debug("added %s: display precision", self.entity_id)
         self._init_display_precision()
         self.async_on_remove(
             async_track_state_change_event(
@@ -416,6 +490,7 @@ class DownsampleSensor(SensorEntity):
                 # positive weight collapses to that value under every method,
                 # so we don't need to model dwell time here.
                 self._publish_weighted_aggregate([(state.state, 1.0)])
+        _LOGGER.debug("added %s: ready", self.entity_id)
 
     @callback
     def _start_timer(self) -> None:
