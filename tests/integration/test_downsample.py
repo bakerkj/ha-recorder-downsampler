@@ -2835,14 +2835,9 @@ async def test_co_owned_device_keeps_our_mirrors(
 ) -> None:
     """Releasing ownership must never take our mirrors with it.
 
-    Regression test for a destructive bug. On HA before 2026.8 every source
-    device we co-own also carries our mirrors, and dropping the config entry
-    from such a device makes ``entity_registry.async_device_modified`` delete
-    every entity of that entry on it — the mirrors, with whatever name, area or
-    precision the user had set. It deleted 156 of them on a live system.
-
-    So the device is left alone while it still holds anything of ours, and the
-    mirror must survive both the initial setup and any later reconcile.
+    ``async_device_modified`` deletes every entity of a config entry removed
+    from a device. Before 2026.8 the co-owned source device holds our mirrors,
+    so releasing it destroyed them — 156 on a live system.
     """
     hass = recorder_hass
     monitor, device_id = _make_source_device(hass)
@@ -2908,11 +2903,7 @@ async def test_mirror_on_a_device_gets_no_area_of_its_own(
 async def test_a_users_area_is_never_overwritten(
     recorder_hass: HomeAssistant,
 ) -> None:
-    """Seeding fills a blank only; a chosen area survives a reload.
-
-    Also covers HA restoring an area from a deleted entry: either way the
-    mirror already has one, and the source's must not clobber it.
-    """
+    """Seeding fills a blank only; a chosen area survives a reload."""
     hass = recorder_hass
     ent_reg = er.async_get(hass)
     areas = ar.async_get(hass)

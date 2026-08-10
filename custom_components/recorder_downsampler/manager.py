@@ -13,15 +13,10 @@ from datetime import timedelta
 from functools import partial
 from typing import Any, cast
 
-# Imported at module level, not lazily inside the functions that use them.
-# A deferred import runs on the event loop the first time it is hit, and an
-# import is not cheap or lock-free: it takes Python's per-module import locks,
-# and `recorder.statistics` in particular drags in SQLAlchemy's query
-# machinery. Doing that on the loop during startup — while other integrations
-# are importing on executor threads — stalls every other integration, and can
-# deadlock outright if any of those imports needs the loop to make progress.
-# `recorder` and `persistent_notification` are both declared dependencies, so
-# they are already set up before us and importing them here is safe.
+# Imported here, not lazily inside the functions using them: a deferred import
+# runs on the event loop and takes Python's import locks, and
+# `recorder.statistics` pulls in SQLAlchemy — enough to stall or deadlock
+# startup. Both integrations are declared dependencies, so this is safe.
 from homeassistant.components import persistent_notification
 from homeassistant.components.recorder import is_entity_recorded
 from homeassistant.components.recorder.models import (
@@ -718,34 +713,15 @@ class RecorderDownsampleManager:
     def release_device_ownership(self) -> None:
         """Drop our config entry from every device it still holds.
 
-        Our mirrors reach their source's device card by pointing at it —
-        ``DownsampleSensor`` sets ``device_entry`` — so the config entry itself
-        must own no device. Earlier versions additionally co-owned each
-        source device so it appeared under the Recorder Downsampler card too —
-        HA 2026.8 restricts a device to a single config entry, so that is no
-        longer possible and the capability has no replacement.
+        Mirrors reach the source's device card via ``device_entry``, so our
+        entry should own no device. HA 2026.8 leaves us a duplicate to shed;
+        earlier versions co-own the source device, which is fine and stays.
 
-        A device we still have entities on is left alone, and that guard is the
-        whole safety of this method. Dropping a config entry from a device is
-        not a bookkeeping change: ``entity_registry.async_device_modified``
-        watches for it and **deletes** every entity of that entry sitting on
-        that device ("remove entities which belong to config entries no longer
-        associated with the device"). Calling this on a device still holding our
-        mirrors therefore destroys them — their registry entries, and with them
-        any name, area or precision the user had set. Recorder history survives,
-        keyed on entity_id, but the entities have to be recreated.
-
-        With the guard the method still does its job. On HA 2026.8 the migration
-        splits each co-owned device and leaves us sole owner of a copy; once the
-        mirrors have re-homed onto the source's device that copy holds nothing
-        of ours and is removed. Before 2026.8 co-ownership is legitimate and
-        every co-owned device still carries our mirrors, so nothing is touched —
-        the correct outcome there, not an accident.
-
-        HA will not clean these up for us: ``device_registry.async_cleanup``
-        only reaps devices that no config entry references, and these reference
-        ours. Idempotent, and self-correcting — a device skipped now is released
-        on a later pass once its entities have moved.
+        Skip devices still holding our entities. ``async_device_modified``
+        deletes every entity of a config entry removed from a device — so
+        releasing one of ours would destroy the mirrors on it. HA never cleans
+        these up itself (``async_cleanup`` spares referenced devices). A skipped
+        device is released on a later pass once its entities have moved.
         """
         if self.entry_id is None:
             return

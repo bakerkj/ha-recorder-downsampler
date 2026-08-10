@@ -199,15 +199,11 @@ class DownsampleSensor(SensorEntity):
             ENTITY_ID_FORMAT, f"{object_id}{ENTITY_ID_SUFFIX}", hass=hass
         )
         self._attr_name = self._derive_name()
-        # Put the mirror on the source's device card. Set before the entity is
-        # added so it is registered on the right device outright: HA reads
-        # `device_entry` when `device_info` is None and passes the id straight
-        # into the entity registry. (DeviceInfo cannot be used — it describes a
-        # device to find-or-create, and from HA 2026.8 that lookup is scoped to
-        # our own config entry, so it would miss the source's device and make a
-        # duplicate.) Re-derived on every reload, and async_get_or_create
-        # re-points an existing mirror, so a source that moves device is
-        # followed.
+        # Put the mirror on the source's device card. Point at the device
+        # (device_entry) rather than describe it (device_info): from HA 2026.8
+        # a device_info lookup only matches our own config entry's devices, so
+        # it would miss this one and create a duplicate. Set before the entity
+        # is added, and re-derived each reload, so a moved source is followed.
         self.device_entry = async_entity_id_to_device(hass, self._source)
         if (state := self.hass.states.get(self._source)) is not None:
             self._refresh_source_metadata(state.attributes)
@@ -241,16 +237,9 @@ class DownsampleSensor(SensorEntity):
     def _seed_area_from_source(self) -> None:
         """Give a device-less mirror the area of its source.
 
-        A mirror that sits on a device inherits that device's area, so there is
-        nothing to store per entity — which is why most mirrors carry no
-        ``area_id`` of their own. A source with no device (a template sensor,
-        say) leaves its mirror nothing to inherit from, so take the area from
-        the source entity itself.
-
-        Only ever fills a blank. If the mirror already has an area it is left
-        alone, whether that area was set by the user or restored by HA from a
-        previously deleted entry — so this can run on every startup without
-        overwriting a deliberate choice.
+        A mirror on a device inherits that device's area; one whose source has
+        no device has nothing to inherit. Only ever fills a blank, so a user's
+        chosen area survives — safe to run on every startup.
         """
         if self.device_entry is not None:
             return
