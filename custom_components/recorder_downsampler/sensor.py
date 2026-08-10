@@ -198,13 +198,14 @@ class DownsampleSensor(SensorEntity):
         self.entity_id = async_generate_entity_id(
             ENTITY_ID_FORMAT, f"{object_id}{ENTITY_ID_SUFFIX}", hass=hass
         )
-        self._attr_name = self._derive_name()
         # Put the mirror on the source's device card. Point at the device
         # (device_entry) rather than describe it (device_info): from HA 2026.8
         # a device_info lookup only matches our own config entry's devices, so
         # it would miss this one and create a duplicate. Set before the entity
         # is added, and re-derived each reload, so a moved source is followed.
         self.device_entry = async_entity_id_to_device(hass, self._source)
+        # After device_entry — the name depends on it.
+        self._attr_name = self._derive_name()
         if (state := self.hass.states.get(self._source)) is not None:
             self._refresh_source_metadata(state.attributes)
 
@@ -217,7 +218,31 @@ class DownsampleSensor(SensorEntity):
             base = state.attributes.get("friendly_name")
         if not base:
             base = self._source.split(".", 1)[1].replace("_", " ").title()
-        return f"{base}{NAME_SUFFIX}"
+        return f"{base}{self._name_qualifier(base)}{NAME_SUFFIX}"
+
+    def _name_qualifier(self, base: str) -> str:
+        """A distinguishing word for a source that has no name of its own.
+
+        A source that is its device's main entity is named for the device, so
+        HA's device page strips the whole name away and the mirror shows as
+        just the suffix. Borrow the source's device class, which is how mirrors
+        of named sources already read there ("Energy (DS)").
+        """
+        device = self.device_entry
+        if device is None:
+            return ""
+        device_name = (device.name_by_user or device.name or "").strip()
+        if not device_name or base.strip() != device_name:
+            return ""
+        source = er.async_get(self.hass).async_get(self._source)
+        device_class = None
+        if source is not None:
+            device_class = source.device_class or source.original_device_class
+        if device_class is None and (state := self.hass.states.get(self._source)):
+            device_class = state.attributes.get("device_class")
+        if not device_class:
+            return ""
+        return f" {str(device_class).replace('_', ' ').title()}"
 
     def _source_display_precision(self) -> int | None:
         """The source's effective display precision: its display_precision
