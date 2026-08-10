@@ -18,7 +18,6 @@ from typing import Any, cast
 # `recorder.statistics` pulls in SQLAlchemy — enough to stall or deadlock
 # startup. Both integrations are declared dependencies, so this is safe.
 from homeassistant.components import persistent_notification
-from homeassistant.components.recorder import is_entity_recorded
 from homeassistant.components.recorder.models import (
     StatisticData,
     StatisticMeanType,
@@ -58,6 +57,15 @@ from .const import (
     SIGNAL_UPDATE_TARGETS,
 )
 from .resolve import _all_known_entity_ids, resolve_rule_entities
+
+# Guarded so a future HA rename disables one diagnostic rather than the whole
+# integration — the contract is_recorded() documents. Still hoisted, so the
+# import never runs on the event loop. Drift is caught early by
+# tests/test_ha_signature_compat.py and the weekly ha-dev-compat job.
+try:
+    from homeassistant.components.recorder import is_entity_recorded
+except ImportError:  # pragma: no cover - only on a future HA
+    is_entity_recorded = None  # type: ignore[assignment]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,6 +111,8 @@ def is_recorded(hass: HomeAssistant, entity_id: str) -> bool | None:
     available, which callers treat as "can't tell, skip the warning". The exact
     API is pinned by tests/test_ha_signature_compat.py.
     """
+    if is_entity_recorded is None:
+        return None
     try:
         return bool(is_entity_recorded(hass, entity_id))
     except Exception:  # noqa: BLE001 - best-effort diagnostic only
