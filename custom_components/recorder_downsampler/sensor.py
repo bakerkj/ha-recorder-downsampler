@@ -199,15 +199,11 @@ class DownsampleSensor(SensorEntity):
             ENTITY_ID_FORMAT, f"{object_id}{ENTITY_ID_SUFFIX}", hass=hass
         )
         self._attr_name = self._derive_name()
-        # Put the mirror on the source's device card. Set before the entity is
-        # added so it is registered on the right device outright: HA reads
-        # `device_entry` when `device_info` is None and passes the id straight
-        # into the entity registry. (DeviceInfo cannot be used — it describes a
-        # device to find-or-create, and from HA 2026.8 that lookup is scoped to
-        # our own config entry, so it would miss the source's device and make a
-        # duplicate.) Re-derived on every reload, and async_get_or_create
-        # re-points an existing mirror, so a source that moves device is
-        # followed.
+        # Put the mirror on the source's device card. Point at the device
+        # (device_entry) rather than describe it (device_info): from HA 2026.8
+        # a device_info lookup only matches our own config entry's devices, so
+        # it would miss this one and create a duplicate. Set before the entity
+        # is added, and re-derived each reload, so a moved source is followed.
         self.device_entry = async_entity_id_to_device(hass, self._source)
         if (state := self.hass.states.get(self._source)) is not None:
             self._refresh_source_metadata(state.attributes)
@@ -236,6 +232,25 @@ class DownsampleSensor(SensorEntity):
             if override is not None
             else opts.get("suggested_display_precision")
         )
+
+    @callback
+    def _seed_area_from_source(self) -> None:
+        """Give a device-less mirror the area of its source.
+
+        A mirror on a device inherits that device's area; one whose source has
+        no device has nothing to inherit. Only ever fills a blank, so a user's
+        chosen area survives — safe to run on every startup.
+        """
+        if self.device_entry is not None:
+            return
+        ent_reg = er.async_get(self.hass)
+        entry = ent_reg.async_get(self.entity_id)
+        if entry is None or entry.area_id is not None:
+            return
+        source = ent_reg.async_get(self._source)
+        if source is None or source.area_id is None:
+            return
+        ent_reg.async_update_entity(self.entity_id, area_id=source.area_id)
 
     def _init_display_precision(self) -> None:
         """Apply the configured display-precision policy (never / once / track)."""
@@ -358,6 +373,7 @@ class DownsampleSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to the source and start the emit timer."""
+        self._seed_area_from_source()
         self._init_display_precision()
         self.async_on_remove(
             async_track_state_change_event(

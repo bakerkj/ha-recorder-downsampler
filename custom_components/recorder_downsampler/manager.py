@@ -13,11 +13,27 @@ from datetime import timedelta
 from functools import partial
 from typing import Any, cast
 
+# Imported here, not lazily inside the functions using them: a deferred import
+# runs on the event loop and takes Python's import locks, and
+# `recorder.statistics` pulls in SQLAlchemy — enough to stall or deadlock
+# startup. Both integrations are declared dependencies, so this is safe.
+from homeassistant.components import persistent_notification
+from homeassistant.components.recorder.models import (
+    StatisticData,
+    StatisticMeanType,
+    StatisticMetaData,
+)
+from homeassistant.components.recorder.statistics import (
+    async_import_statistics,
+    get_metadata,
+    statistics_during_period,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -41,6 +57,15 @@ from .const import (
     SIGNAL_UPDATE_TARGETS,
 )
 from .resolve import _all_known_entity_ids, resolve_rule_entities
+
+# Guarded so a future HA rename disables one diagnostic rather than the whole
+# integration — the contract is_recorded() documents. Still hoisted, so the
+# import never runs on the event loop. Drift is caught early by
+# tests/test_ha_signature_compat.py and the weekly ha-dev-compat job.
+try:
+    from homeassistant.components.recorder import is_entity_recorded
+except ImportError:  # pragma: no cover - only on a future HA
+    is_entity_recorded = None  # type: ignore[assignment]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,11 +111,9 @@ def is_recorded(hass: HomeAssistant, entity_id: str) -> bool | None:
     available, which callers treat as "can't tell, skip the warning". The exact
     API is pinned by tests/test_ha_signature_compat.py.
     """
+    if is_entity_recorded is None:
+        return None
     try:
-        from homeassistant.components.recorder import (
-            is_entity_recorded,
-        )
-
         return bool(is_entity_recorded(hass, entity_id))
     except Exception:  # noqa: BLE001 - best-effort diagnostic only
         return None
@@ -551,8 +574,6 @@ class RecorderDownsampleManager:
         duration: float,
     ) -> None:
         """Fire the completion event and raise/clear persistent notifications."""
-        from homeassistant.components import persistent_notification
-
         self.hass.bus.async_fire(
             EVENT_BACKFILL_COMPLETED,
             {
@@ -632,18 +653,6 @@ class RecorderDownsampleManager:
     async def _async_backfill_one(
         self, mirror_entity_id: str, *, dry_run: bool = False
     ) -> str:
-        from homeassistant.components.recorder.models import (
-            StatisticData,
-            StatisticMeanType,
-            StatisticMetaData,
-        )
-        from homeassistant.components.recorder.statistics import (
-            async_import_statistics,
-            get_metadata,
-            statistics_during_period,
-        )
-        from homeassistant.helpers.recorder import get_instance
-
         ent_reg = er.async_get(self.hass)
         entry = ent_reg.async_get(mirror_entity_id)
         if entry is None or entry.platform != DOMAIN:
@@ -714,26 +723,26 @@ class RecorderDownsampleManager:
     def release_device_ownership(self) -> None:
         """Drop our config entry from every device it still holds.
 
-        Our mirrors reach their source's device card by pointing at it —
-        ``DownsampleSensor`` sets ``device_entry`` — so the config entry itself
-        must own no device. Earlier versions additionally co-owned each
-        source device so it appeared under the Recorder Downsampler card too —
-        HA 2026.8 restricts a device to a single config entry, so that is no
-        longer possible and the capability has no replacement.
+        Mirrors reach the source's device card via ``device_entry``, so our
+        entry should own no device. HA 2026.8 leaves us a duplicate to shed;
+        earlier versions co-own the source device, which is fine and stays.
 
-        ``remove_config_entry_id`` does the right thing on either side of that
-        change. On HA 2026.8 the migration split each co-owned device and left
-        us holding an empty duplicate of the source's device, which we are the
-        sole owner of, so this removes it. On earlier releases the same call
-        just drops our co-ownership and leaves the source integration's device
-        intact.
-
-        HA will not do this for us: ``device_registry.async_cleanup`` only
-        reaps devices that no config entry references, and these reference ours.
-        Idempotent — once we own nothing it is a no-op.
+        Skip devices still holding our entities. ``async_device_modified``
+        deletes every entity of a config entry removed from a device — so
+        releasing one of ours would destroy the mirrors on it. HA never cleans
+        these up itself (``async_cleanup`` spares referenced devices). A skipped
+        device is released on a later pass once its entities have moved.
         """
         if self.entry_id is None:
             return
+        ent_reg = er.async_get(self.hass)
         dev_reg = dr.async_get(self.hass)
         for device in list(dr.async_entries_for_config_entry(dev_reg, self.entry_id)):
+            if any(
+                entry.config_entry_id == self.entry_id
+                for entry in er.async_entries_for_device(
+                    ent_reg, device.id, include_disabled_entities=True
+                )
+            ):
+                continue
             dev_reg.async_update_device(device.id, remove_config_entry_id=self.entry_id)

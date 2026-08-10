@@ -29,6 +29,7 @@ from homeassistant.components.recorder.statistics import (
 )
 from homeassistant.const import SERVICE_RELOAD, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
@@ -2822,3 +2823,116 @@ async def test_initial_mirror_creation_waits_for_source_integration(
     st = hass.states.get(MIRROR)
     assert st is not None
     assert float(st.state) == pytest.approx(100.0)
+
+
+@pytest.mark.skipif(
+    hasattr(dr.DeviceEntry, "config_entry_id"),
+    reason="HA 2026.8 restricts a device to one config entry, so add_config_entry_id "
+    "is inert and the co-owned state under test cannot be constructed",
+)
+async def test_co_owned_device_keeps_our_mirrors(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """Releasing ownership must never take our mirrors with it.
+
+    ``async_device_modified`` deletes every entity of a config entry removed
+    from a device. Before 2026.8 the co-owned source device holds our mirrors,
+    so releasing it destroyed them — 156 on a live system.
+    """
+    hass = recorder_hass
+    monitor, device_id = _make_source_device(hass)
+    hass.states.async_set(SOURCE, "100", MEAS)
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+
+    ours = hass.config_entries.async_entries(DOMAIN)[0]
+    dev_reg = dr.async_get(hass)
+    # Recreate the pre-2026.8 shape: the source device co-owned by us, with our
+    # mirror living on it. This is what every upgrading install looks like.
+    dev_reg.async_update_device(device_id, add_config_entry_id=ours.entry_id)
+    assert device_id in _owned_device_ids(hass, ours.entry_id)
+    assert _entry(hass, MIRROR).device_id == device_id
+
+    manager = hass.data[DOMAIN][DATA_MANAGER]
+    manager.release_device_ownership()
+    await hass.async_block_till_done()
+
+    # The mirror is still registered, still on the source's device.
+    assert _entry(hass, MIRROR) is not None
+    assert _entry(hass, MIRROR).device_id == device_id
+    assert hass.states.get(MIRROR) is not None
+    # And the source integration still has its device.
+    assert device_id in _owned_device_ids(hass, monitor.entry_id)
+
+
+async def test_deviceless_mirror_takes_the_sources_area(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """A source with no device has no area to inherit, so copy the source's."""
+    hass = recorder_hass
+    ent_reg = er.async_get(hass)
+    area = ar.async_get(hass).async_get_or_create("Boiler Room")
+    src = ent_reg.async_get_or_create(
+        "sensor", "template", "tmpl1", suggested_object_id="demo_power"
+    )
+    assert src.entity_id == SOURCE
+    ent_reg.async_update_entity(src.entity_id, area_id=area.id)
+    hass.states.async_set(SOURCE, "100", MEAS)
+
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+
+    mirror = _entry(hass, MIRROR)
+    assert mirror.device_id is None  # nothing to inherit from
+    assert mirror.area_id == area.id
+
+
+async def test_mirror_on_a_device_gets_no_area_of_its_own(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """A mirror on a device inherits that device's area — nothing is stored."""
+    hass = recorder_hass
+    _make_source_device(hass)
+    hass.states.async_set(SOURCE, "100", MEAS)
+
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+
+    mirror = _entry(hass, MIRROR)
+    assert mirror.device_id is not None
+    assert mirror.area_id is None  # inherited from the device, not copied
+
+
+async def test_a_users_area_is_never_overwritten(
+    recorder_hass: HomeAssistant,
+) -> None:
+    """Seeding fills a blank only; a chosen area survives a reload."""
+    hass = recorder_hass
+    ent_reg = er.async_get(hass)
+    areas = ar.async_get(hass)
+    src_area = areas.async_get_or_create("Boiler Room")
+    chosen = areas.async_get_or_create("Utility")
+    src = ent_reg.async_get_or_create(
+        "sensor", "template", "tmpl2", suggested_object_id="demo_power"
+    )
+    ent_reg.async_update_entity(src.entity_id, area_id=src_area.id)
+    hass.states.async_set(SOURCE, "100", MEAS)
+    await _setup(hass, **{CONF_INTERVAL: "00:00:10"})
+    assert _entry(hass, MIRROR).area_id == src_area.id
+
+    # The user moves the mirror somewhere else, then everything reloads.
+    ent_reg.async_update_entity(MIRROR, area_id=chosen.id)
+    same = CONFIG_SCHEMA(
+        {
+            DOMAIN: {
+                CONF_WARN_UNEXCLUDED: False,
+                CONF_INTERVAL: "00:00:10",
+                CONF_RULES: [{"name": "demo", "entity_ids": [SOURCE]}],
+            }
+        }
+    )
+    with patch(
+        "custom_components.recorder_downsampler.async_integration_yaml_config",
+        AsyncMock(return_value=same),
+    ):
+        await hass.services.async_call(DOMAIN, SERVICE_RELOAD, {}, blocking=True)
+        await hass.async_block_till_done()
+
+    assert _entry(hass, MIRROR).area_id == chosen.id
