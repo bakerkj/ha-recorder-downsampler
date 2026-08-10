@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.9](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.8...v0.0.9) (2026-08-10)
+
+
+### Bug Fixes
+
+* name mirrors of sources that have no name of their own ([#82](https://github.com/bakerkj/ha-recorder-downsampler/issues/82)) ([086172e](https://github.com/bakerkj/ha-recorder-downsampler/commit/086172ed4afc0aa86d2d9dc93232d91c78ece083))
+
 ## [0.0.8](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.7...v0.0.8) (2026-08-10)
 
 
