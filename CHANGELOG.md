@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.0.10](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.9...v0.0.10) (2026-09-19)
+
+
+### Bug Fixes
+
+* **renovate:** don't duplicate runs-on detection with the built-in manager ([#106](https://github.com/bakerkj/ha-recorder-downsampler/issues/106)) ([d916251](https://github.com/bakerkj/ha-recorder-downsampler/commit/d916251d967546bcd2ce78479d6b3be78d6ba33e))
+
+
+### Miscellaneous Chores
+
+* **deps:** update anthropics/claude-code-action action to v1.0.193 ([#84](https://github.com/bakerkj/ha-recorder-downsampler/issues/84)) ([6896ed2](https://github.com/bakerkj/ha-recorder-downsampler/commit/6896ed210f87ead825373f37790e7799cbd576f1))
+* **deps:** update anthropics/claude-code-action action to v1.0.194 ([#89](https://github.com/bakerkj/ha-recorder-downsampler/issues/89)) ([8d777b0](https://github.com/bakerkj/ha-recorder-downsampler/commit/8d777b02ebe9c4ae361faa9dac259e185ad0f9f3))
+* **deps:** update anthropics/claude-code-action action to v1.0.205 ([#91](https://github.com/bakerkj/ha-recorder-downsampler/issues/91)) ([70df931](https://github.com/bakerkj/ha-recorder-downsampler/commit/70df931d219dfbf896143bef632b28ed9cb85ade))
+* **deps:** update anthropics/claude-code-action action to v1.0.211 ([#97](https://github.com/bakerkj/ha-recorder-downsampler/issues/97)) ([d0a0227](https://github.com/bakerkj/ha-recorder-downsampler/commit/d0a0227551af70f6a0673448a54b2c520bbc623c))
+* **deps:** update anthropics/claude-code-action action to v1.0.212 ([#98](https://github.com/bakerkj/ha-recorder-downsampler/issues/98)) ([23c466e](https://github.com/bakerkj/ha-recorder-downsampler/commit/23c466e29a4232f8807041168ba7b0217b89ffa7))
+* **deps:** update anthropics/claude-code-action action to v1.0.217 ([#100](https://github.com/bakerkj/ha-recorder-downsampler/issues/100)) ([2440e13](https://github.com/bakerkj/ha-recorder-downsampler/commit/2440e130ed3de442392e938c2fd2a1e385104f89))
+* **deps:** update anthropics/claude-code-action action to v1.0.218 ([#101](https://github.com/bakerkj/ha-recorder-downsampler/issues/101)) ([8f2a535](https://github.com/bakerkj/ha-recorder-downsampler/commit/8f2a535d034c147a8a31250d2d17ffffa7147d2d))
+* **deps:** update anthropics/claude-code-action action to v1.0.226 ([#114](https://github.com/bakerkj/ha-recorder-downsampler/issues/114)) ([5ff32ed](https://github.com/bakerkj/ha-recorder-downsampler/commit/5ff32edf38b881b652b3355a83eb0771500f52b8))
+* **deps:** update astral-sh/setup-uv action to v10 ([#87](https://github.com/bakerkj/ha-recorder-downsampler/issues/87)) ([22b58db](https://github.com/bakerkj/ha-recorder-downsampler/commit/22b58dbf8f147f62e46c83a293f6cc139c55bf68))
+* **deps:** update dependency ubuntu to v26 ([#108](https://github.com/bakerkj/ha-recorder-downsampler/issues/108)) ([19c4e13](https://github.com/bakerkj/ha-recorder-downsampler/commit/19c4e1388f1cf813e904bce5355cd8393a9234df))
+* **deps:** update dependency uv to v0.12.10 ([#99](https://github.com/bakerkj/ha-recorder-downsampler/issues/99)) ([6a68b45](https://github.com/bakerkj/ha-recorder-downsampler/commit/6a68b45e6e4893aaa048be51a8ff9b2de323de81))
+* **deps:** update dependency uv to v0.12.11 ([#102](https://github.com/bakerkj/ha-recorder-downsampler/issues/102)) ([ff614e9](https://github.com/bakerkj/ha-recorder-downsampler/commit/ff614e9773c6e8284a3ef40d791d894c38ee68b6))
+* **deps:** update dependency uv to v0.12.14 ([#103](https://github.com/bakerkj/ha-recorder-downsampler/issues/103)) ([6d06151](https://github.com/bakerkj/ha-recorder-downsampler/commit/6d06151873703c460d333cfb54740643744efd31))
+* **deps:** update dependency uv to v0.12.15 ([#110](https://github.com/bakerkj/ha-recorder-downsampler/issues/110)) ([16aa740](https://github.com/bakerkj/ha-recorder-downsampler/commit/16aa7409bdb56c1d5413301bd3eb2fa52c6cfe77))
+* **deps:** update dependency uv to v0.12.17 ([#112](https://github.com/bakerkj/ha-recorder-downsampler/issues/112)) ([d84eb45](https://github.com/bakerkj/ha-recorder-downsampler/commit/d84eb45f79373f0678146ce2e74cca6ea6670ad6))
+* **deps:** update dependency uv to v0.12.5 ([#85](https://github.com/bakerkj/ha-recorder-downsampler/issues/85)) ([ebf4786](https://github.com/bakerkj/ha-recorder-downsampler/commit/ebf4786eb6b0b5af691f3d757822c425e1ac7260))
+* **deps:** update dependency uv to v0.12.7 ([#92](https://github.com/bakerkj/ha-recorder-downsampler/issues/92)) ([17a9541](https://github.com/bakerkj/ha-recorder-downsampler/commit/17a95419bce43858f3b86bddb61801f01c73b422))
+* **deps:** update dependency uv to v0.12.8 ([#94](https://github.com/bakerkj/ha-recorder-downsampler/issues/94)) ([3ac99dc](https://github.com/bakerkj/ha-recorder-downsampler/commit/3ac99dc47e1e5f6459d7102508e7b2ddd5d40b53))
+* **deps:** update dependency uv to v0.12.9 ([#95](https://github.com/bakerkj/ha-recorder-downsampler/issues/95)) ([380fe91](https://github.com/bakerkj/ha-recorder-downsampler/commit/380fe915e725ca0db3d0f29492a60f1811b333e9))
+* **deps:** update github-actions ([#104](https://github.com/bakerkj/ha-recorder-downsampler/issues/104)) ([51809a4](https://github.com/bakerkj/ha-recorder-downsampler/commit/51809a47f51d4c9d57cf69307f962ea0cf25b088))
+* **deps:** update pre-commit hook astral-sh/ruff-pre-commit to v0.16.3 ([#86](https://github.com/bakerkj/ha-recorder-downsampler/issues/86)) ([8bdc640](https://github.com/bakerkj/ha-recorder-downsampler/commit/8bdc6405f97ade2f8770441ae471bc0a8cf92a08))
+* **deps:** update pre-commit hook astral-sh/ruff-pre-commit to v0.16.4 ([#90](https://github.com/bakerkj/ha-recorder-downsampler/issues/90)) ([5645715](https://github.com/bakerkj/ha-recorder-downsampler/commit/564571579dba866b596d050a34fc1f1c3db7f26c))
+* **deps:** update pre-commit hook astral-sh/ruff-pre-commit to v0.16.5 ([#93](https://github.com/bakerkj/ha-recorder-downsampler/issues/93)) ([edaeab5](https://github.com/bakerkj/ha-recorder-downsampler/commit/edaeab542daba220df4bea1072f05633d8d7f452))
+* **deps:** update pre-commit hook astral-sh/ruff-pre-commit to v0.16.6 ([#96](https://github.com/bakerkj/ha-recorder-downsampler/issues/96)) ([608e01c](https://github.com/bakerkj/ha-recorder-downsampler/commit/608e01cf06f080a0f79bb3d71291bfb8a7183c4f))
+* **deps:** update pre-commit hook astral-sh/ruff-pre-commit to v0.16.7 ([#105](https://github.com/bakerkj/ha-recorder-downsampler/issues/105)) ([92ec624](https://github.com/bakerkj/ha-recorder-downsampler/commit/92ec6245474c00c7c175fa0638fd77c90fe949c8))
+* **deps:** update pre-commit hook astral-sh/ruff-pre-commit to v0.16.8 ([#111](https://github.com/bakerkj/ha-recorder-downsampler/issues/111)) ([6813b3a](https://github.com/bakerkj/ha-recorder-downsampler/commit/6813b3a2f3f6cb61c5f679056097b53065979b2c))
+* **deps:** update pre-commit hook rbubley/mirrors-prettier to v3.9.7 ([#109](https://github.com/bakerkj/ha-recorder-downsampler/issues/109)) ([c5f250d](https://github.com/bakerkj/ha-recorder-downsampler/commit/c5f250db531b33a9e37d389f981d0e965b42e7e3))
+* **deps:** update pre-commit hook rbubley/mirrors-prettier to v3.9.8 ([#113](https://github.com/bakerkj/ha-recorder-downsampler/issues/113)) ([d627eea](https://github.com/bakerkj/ha-recorder-downsampler/commit/d627eea1fab1e521b5a90c9b874422fa793ad7a5))
+* switch actionlint pre-commit hook from rhysd (stale) to kjanat fork ([#107](https://github.com/bakerkj/ha-recorder-downsampler/issues/107)) ([750fc97](https://github.com/bakerkj/ha-recorder-downsampler/commit/750fc97ba28bb4e3ad2b86007a6d0b6336b41a2c))
+
 ## [0.0.9](https://github.com/bakerkj/ha-recorder-downsampler/compare/v0.0.8...v0.0.9) (2026-08-10)
 
 
