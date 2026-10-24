@@ -50,8 +50,10 @@ jobs:
         with:
           python-version-file: .python-version
 
+      - name: Verify uv.lock matches pyproject.toml
+        run: uv lock --check
       - name: Install the locked environment
-        run: uv sync
+        run: uv sync --group test --frozen
 
       # Imperative, so it overrides the locked homeassistant without having to
       # relax anything in pyproject. The test plugin is named unpinned so uv
