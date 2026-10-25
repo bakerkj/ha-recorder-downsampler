@@ -6,13 +6,16 @@ requires-python = ">=3.14.2"
 dependencies = []
 
 [dependency-groups]
-dev = [
+test = [
   "pytest-homeassistant-custom-component>=0.13.323",
+]
+dev = [
+  { include-group = "test" },
   "mypy>=2.1.0",
 ]
 
 [tool.uv]
-required-version = "==0.13.4"
+required-version = "==0.13.5"
 prerelease = "allow"
 # HA's test plugin pulls an older mypy; force a build new enough to parse the
 # Python 3.14 parenthesis-optional `except A, B:` (PEP 758) syntax.
