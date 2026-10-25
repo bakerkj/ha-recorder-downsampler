@@ -90,6 +90,8 @@ def _entry(hass: HomeAssistant, entity_id: str) -> er.RegistryEntry:
 def _device(hass: HomeAssistant, device_id: str) -> dr.DeviceEntry:
     device = dr.async_get(hass).async_get(device_id)
     assert device is not None, f"device {device_id} not in registry"
+    # HA 2026.10 can also return a ChildDeviceEntry; ours are never children.
+    assert isinstance(device, dr.DeviceEntry), f"device {device_id} is a child"
     return device
 
 

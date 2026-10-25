@@ -1,34 +1,34 @@
 .PHONY: venv test test-unit test-integration test-all test-unit-docker test-integration-docker clean
 
 VENV := .venv
-PYTHON := $(VENV)/bin/python
-PIP := $(VENV)/bin/pip
-PYTEST := $(VENV)/bin/pytest
+# Same install as CI: the locked test group, without the dev group's mypy.
+SYNC := uv sync --frozen --no-default-groups --group test
+RUN := uv run --no-sync python -m pytest
 
 venv:
-	python3 -m venv $(VENV)
-	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements-test.txt
+	$(SYNC)
 
 # Default: unit tests only (fast)
 test: test-unit
 
 test-unit: venv
-	$(PYTEST) tests/ --ignore=tests/integration -v
+	$(RUN) tests/ --ignore=tests/integration -v
 
 test-integration: venv
-	$(PYTEST) tests/integration/ -v
+	$(RUN) tests/integration/ -v
 
 test-all: test-unit test-integration
 
-# Docker variants — match the GitHub Actions environment (Python 3.14)
+# Docker variants — match the GitHub Actions environment (Python 3.14). The venv
+# lives outside the mount so the container never overwrites the host's .venv.
+DOCKER := docker run --rm -v $(PWD):/work -w /work -e UV_PROJECT_ENVIRONMENT=/opt/venv python:3.14
+DOCKER_SETUP := pip install -q uv==0.13.5 && $(SYNC)
+
 test-unit-docker:
-	docker run --rm -v $(PWD):/work -w /work python:3.14 \
-		bash -c "pip install -r requirements-test.txt -q && python -m pytest tests/ --ignore=tests/integration -v"
+	$(DOCKER) bash -c "$(DOCKER_SETUP) && $(RUN) tests/ --ignore=tests/integration -v"
 
 test-integration-docker:
-	docker run --rm -v $(PWD):/work -w /work python:3.14 \
-		bash -c "pip install -r requirements-test.txt -q && python -m pytest tests/integration/ -v"
+	$(DOCKER) bash -c "$(DOCKER_SETUP) && $(RUN) tests/integration/ -v"
 
 clean:
 	rm -rf $(VENV) .pytest_cache __pycache__ tests/__pycache__ tests/integration/__pycache__

@@ -14,11 +14,13 @@ from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
 
 from .const import DATA_MANAGER, DOMAIN
 
 if TYPE_CHECKING:
+    # Type-only: the floor HA does not export it, and annotations are lazy.
+    from homeassistant.components.repairs import RepairsFlowResult
+
     from . import RecorderDownsampleManager
 
 
@@ -37,7 +39,7 @@ class OrphanedMirrorRepairFlow(RepairsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         return self.async_show_menu(
             step_id="init",
             menu_options=["delete_this", "delete_all", "ignore_this", "ignore_all"],
@@ -45,7 +47,7 @@ class OrphanedMirrorRepairFlow(RepairsFlow):
 
     async def async_step_delete_this(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         mgr = self._manager()
         unique_id = self._data.get("unique_id")
         if mgr is not None and isinstance(unique_id, str):
@@ -54,7 +56,7 @@ class OrphanedMirrorRepairFlow(RepairsFlow):
 
     async def async_step_delete_all(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         mgr = self._manager()
         if mgr is not None:
             await mgr.async_delete_all_orphans()
@@ -62,7 +64,7 @@ class OrphanedMirrorRepairFlow(RepairsFlow):
 
     async def async_step_ignore_this(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         mgr = self._manager()
         unique_id = self._data.get("unique_id")
         if mgr is not None and isinstance(unique_id, str):
@@ -71,7 +73,7 @@ class OrphanedMirrorRepairFlow(RepairsFlow):
 
     async def async_step_ignore_all(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         mgr = self._manager()
         if mgr is not None:
             await mgr.async_ignore_all_orphans()

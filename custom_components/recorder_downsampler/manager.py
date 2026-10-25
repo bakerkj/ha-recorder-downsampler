@@ -63,7 +63,12 @@ from .resolve import _all_known_entity_ids, resolve_rule_entities
 # import never runs on the event loop. Drift is caught early by
 # tests/test_ha_signature_compat.py and the weekly ha-dev-compat job.
 try:
-    from homeassistant.components.recorder import is_entity_recorded
+    # HA 2026.10 moved it to recorder.entity_options and re-exports it from the
+    # package outside __all__, so strict mypy calls it private. The package path
+    # still works on every supported HA; the submodule is absent on the floor.
+    from homeassistant.components.recorder import (  # type: ignore[attr-defined]
+        is_entity_recorded,
+    )
 except ImportError:  # pragma: no cover - only on a future HA
     is_entity_recorded = None  # type: ignore[assignment]
 
