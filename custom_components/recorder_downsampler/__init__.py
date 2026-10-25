@@ -21,7 +21,6 @@ from __future__ import annotations
 import logging
 import re
 
-import voluptuous as vol
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import SERVICE_RELOAD, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
@@ -29,6 +28,13 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.reload import async_integration_yaml_config
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
+
+try:
+    # HA 2026.9 replaced voluptuous with the API-compatible probatio and types
+    # service schemas as probatio; build ours with whichever this HA ships.
+    import probatio as vol
+except ImportError:  # HA < 2026.9
+    import voluptuous as vol  # type: ignore[no-redef]
 
 # Re-exported so the sensor platform and tests keep importing from the package
 # root. The implementations live in focused modules.

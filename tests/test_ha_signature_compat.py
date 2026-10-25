@@ -13,7 +13,10 @@ import inspect
 
 def test_recorder_is_entity_recorded_api() -> None:
     """We call ``recorder.is_entity_recorded(hass, entity_id)`` for warn-unexcluded."""
-    from homeassistant.components.recorder import is_entity_recorded
+    # The import path manager.py uses; see the attr-defined note there.
+    from homeassistant.components.recorder import (  # type: ignore[attr-defined]
+        is_entity_recorded,
+    )
 
     assert callable(is_entity_recorded)
     # We rely on the (hass, entity_id) -> bool signature.

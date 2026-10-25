@@ -6,7 +6,12 @@ from datetime import timedelta
 from typing import Any, cast
 
 import pytest
-import voluptuous as vol
+
+try:
+    # The library CONFIG_SCHEMA is built with, so this is the Invalid it raises.
+    import probatio as vol
+except ImportError:  # HA < 2026.9
+    import voluptuous as vol  # type: ignore[no-redef]
 
 from custom_components.recorder_downsampler import CONFIG_SCHEMA
 from custom_components.recorder_downsampler.const import (

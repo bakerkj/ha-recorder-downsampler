@@ -15,14 +15,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # CEILING — the newest Home Assistant this is expected to work on.
-          # Pinned here rather than left to uv.lock: nothing in pyproject
-          # constrains homeassistant (the dev group only floors the test plugin
-          # with `>=`), so the lock drifts behind and Renovate has no `==` to
-          # bump. Raise this when a new HA minor ships.
-          - name: HA ceiling (2026.8)
+          # CEILING — the HA in uv.lock, untouched. pyproject pins the test
+          # plugin with `==`, and the plugin pins homeassistant exactly, so
+          # Renovate's bump of that pin is the bump of the ceiling.
+          - name: HA ceiling (uv.lock)
             slug: ha-ceiling
-            ha: homeassistant==2026.8.*
+            ha: ""
           # FLOOR — the oldest release exercised on every PR. Pinned here
           # rather than in pyproject so Renovate cannot see it: lowering the
           # tested range should be a deliberate decision, not a merged
@@ -37,9 +35,14 @@ jobs:
           #
           # Kept equal to the `homeassistant` key in hacs.json, so what is
           # advertised is what is actually exercised. Raise both together.
+          #
+          # probatio replaced voluptuous in HA 2026.9; the locked env still has
+          # it, so drop it or the floor runs our probatio branch, not the
+          # voluptuous one a real 2026.7 install takes.
           - name: HA floor (2026.7)
             slug: ha-floor
             ha: homeassistant==2026.7.*
+            drop: probatio
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
@@ -63,9 +66,14 @@ jobs:
       # exactly, so leaving the locked one installed would conflict). Later
       # steps pass --no-sync so uv doesn't restore the lockfile version.
       - name: Select the Home Assistant under test
+        if: matrix.ha != ''
         run: >-
           uv pip install "${{ matrix.ha }}"
           pytest-homeassistant-custom-component
+
+      - name: Drop packages the HA under test does not ship
+        if: matrix.drop
+        run: uv pip uninstall ${{ matrix.drop }}
 
       - name: Home Assistant under test
         run: >-

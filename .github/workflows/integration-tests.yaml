@@ -19,12 +19,13 @@ jobs:
           # there. It matters more here: the device-ownership tests live in
           # this suite, and release_device_ownership() is exactly the code
           # whose behaviour differs between the floor and the ceiling.
-          - name: HA ceiling (2026.8)
+          - name: HA ceiling (uv.lock)
             slug: ha-ceiling
-            ha: homeassistant==2026.8.*
+            ha: ""
           - name: HA floor (2026.7)
             slug: ha-floor
             ha: homeassistant==2026.7.*
+            drop: probatio
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
@@ -43,9 +44,14 @@ jobs:
         run: uv sync --no-default-groups --group test --frozen
 
       - name: Select the Home Assistant under test
+        if: matrix.ha != ''
         run: >-
           uv pip install "${{ matrix.ha }}"
           pytest-homeassistant-custom-component
+
+      - name: Drop packages the HA under test does not ship
+        if: matrix.drop
+        run: uv pip uninstall ${{ matrix.drop }}
 
       - name: Home Assistant under test
         run: >-
